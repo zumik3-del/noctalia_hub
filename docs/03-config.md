@@ -152,7 +152,23 @@ domains:
 | `glyph` | no | Tabler glyph; falls back to a default per `kind` |
 | `kind` | yes | Rendering only: `status` \| `metric` \| `release` \| `link` \| `graph` \| `text` \| `console` \| `list` |
 | `span` | no | `1` or `2` — how many cells the card occupies in the flow |
+| `description` | no | One line of prose; see below |
 | `hidden` | no | `true` keeps the card in the config without rendering it |
+
+#### description
+
+A single line saying what the thing is, for when you cannot tell from the name.
+`Router · Keenetic gateway` is ambiguous; `Gateway and routing` is not.
+
+**It shows on the selected card and on expanded rows, nowhere else.** Eighteen
+monitored services each carrying a description is eighteen extra lines in a zone —
+and the zone grows taller than the screen, which is the failure this project is
+built to avoid. The description is for the moment you are already looking at one
+card, which is exactly when a selected card is.
+
+Always-on descriptions are a zone-level toggle the panel does not have. If a zone
+ever needs one, it is `show_descriptions` on the domain, not a layout change per
+card.
 
 ### Data
 
@@ -435,8 +451,14 @@ The pipeline is unchanged — `fetch → extract → map → format`. What chang
 | Field | Description |
 |---|---|
 | `max_items` | Rows shown; default 10 |
+| `row_format` | Per-row template, e.g. `"{feed}  {title}"` |
+| `description` | Second line, shown when the card is selected |
 | `source.extract_lines` | Field name or index to take from each row |
 | `source.parse` | `json` when the command emits JSON, so `extract` can index it |
+
+A row is a mapping, whatever produced it: JSON keys from a `command` source,
+`title` / `link` / `pubDate` / `feed` from `rss`, one field from `command` text.
+`row_format` templates the row the same way `format` templates a single value.
 
 A list card is collapsed to a count by default and expands on Enter. That is the
 only card that changes shape when selected, and the reason is capacity: the top 8
@@ -612,6 +634,39 @@ source:
   pick: first
   tag: title
 ```
+
+#### feeds — many feeds, one card
+
+Sixteen repositories do not belong on sixteen rows of a panel that is supposed to
+be read at a glance. `feeds` merges them into one card:
+
+```yaml
+- id: infra-releases
+  title: Infra
+  kind: list
+  max_items: 6
+  row_format: "{feed}  {title}"
+  source:
+    type: rss
+    feeds:
+      pi-hole: https://github.com/pi-hole/pi-hole/releases.atom
+      caddy: https://github.com/caddyserver/caddy/releases.atom
+      forgejo: https://codeberg.org/forgejo/forgejo/releases.rss
+```
+
+The keys are the labels; they become the `{feed}` placeholder. That is the whole
+reason `feeds` is a mapping and not a list — a release with no repository name
+attached is not information, it is a version number.
+
+**Merged feeds are always sorted newest-first.** There is no `sort` field because
+there is no sensible alternative: two timelines cannot be concatenated, and a
+merge that preserves feed order is not a merge, it is a rotation through
+whichever repo happens to be listed first. A single `url` keeps the order the
+feed returned.
+
+Row fields are `title`, `link`, `pubDate` and `feed`, plus whatever `extract`
+yields. Both GitHub and Forgejo put the version tag in `<title>`, so the same
+`tag: title` works for either host — verified against both.
 
 ### static
 

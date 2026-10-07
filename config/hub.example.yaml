@@ -34,6 +34,7 @@ domains:
         title: Dynacat
         glyph: cat
         kind: status
+        description: Dashboard, feeds and release watching
         link: https://dynacat.lan
         source:
           type: http
@@ -154,6 +155,55 @@ domains:
           pick: first
           tag: title
         link_template: "https://github.com/kovidgoyal/kitty/releases/tag/{tag}"
+
+
+  # ── Feeds ─────────────────────────────────────────────────────────────────
+  # Many feeds, one card. Merged feeds are always sorted newest-first — there is
+  # no `sort` field because there is no wrong answer to offer. The keys are the
+  # labels and become `{feed}`; a version with no repository attached is not
+  # information. See D19.
+  #
+  # One dead feed annotates the card ("6 of 7 feeds") rather than turning it red.
+  - id: feeds
+    title: Feeds
+    glyph: rss
+    interval_sec: 1800
+    stale_after_sec: 7200
+
+    cards:
+      - id: infra-releases
+        title: Infra
+        glyph: package
+        kind: list
+        span: 2
+        max_items: 6
+        row_format: "{feed}  {title}"
+        description: Newest release across the infrastructure stack
+        source:
+          type: rss
+          feeds:
+            pi-hole: https://github.com/pi-hole/pi-hole/releases.atom
+            caddy: https://github.com/caddyserver/caddy/releases.atom
+            forgejo: https://codeberg.org/forgejo/forgejo/releases.rss
+            authelia: https://github.com/authelia/authelia/releases.atom
+            duplicati: https://github.com/duplicati/duplicati/releases.atom
+            pocketbase: https://github.com/pocketbase/pocketbase/releases.atom
+            xyops: https://github.com/pixlcore/xyops/releases.atom
+
+      # community-scripts publishes a plain RSS feed of new scripts. No
+      # thumbnails, no rendering — which is exactly why this fits a panel and
+      # does not fit an HTML dashboard.
+      - id: proxmox-scripts
+        title: New scripts
+        glyph: file-plus
+        kind: list
+        max_items: 8
+        row_format: "{title}"
+        description: Community scripts for Proxmox, newest first
+        source:
+          type: rss
+          url: https://community-scripts.org/api/rss/scripts
+          pick: first
 
 
   # ── Repositories ──────────────────────────────────────────────────────────
@@ -343,6 +393,7 @@ domains:
         kind: list
         max_items: 8
         format: "{n} sites"
+        description: Hostnames caddy adapts from its Caddyfile
         source:
           type: command
           argv: ["ssh", "pve.lan",

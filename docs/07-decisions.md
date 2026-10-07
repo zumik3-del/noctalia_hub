@@ -411,6 +411,59 @@ exit status.
 
 ---
 
+## D18. A description is a second line on the selected card only
+
+**Decision.** `description:` holds one line of prose. It renders on the selected
+card and on expanded list rows, and nowhere else.
+
+**Why.** Eighteen monitored services, each with a line explaining what it is.
+Showing all eighteen at once doubles the zone's height, and a zone taller than the
+screen is the failure this project exists to avoid. But the description earns its
+place the moment you focus one card, which is exactly what selection means.
+
+**Rejected.**
+
+- *Always on.* It is not a rendering detail, it is a layout decision taken per card
+  that belongs to the zone. Sixteen cards in a zone either fit or do not, and the
+  author cannot know which without trying.
+- *A tooltip.* The panel is keyboard-first and there is no hover; a description you
+  only see by pointing at it is a description nobody reads.
+- *Folding it into `title`.* `Proxmox — Web interface for Proxmox VE` is a title
+  nobody can scan, because the part you scan by is buried mid-string.
+
+**Consequence.** A zone that genuinely wants them always visible needs a
+domain-level `show_descriptions`, which does not exist yet. When it does, it is
+one flag on the zone rather than a per-card decision.
+
+---
+
+## D19. Many feeds merge into one card, sorted by date
+
+**Decision.** An `rss` source takes either a single `url` or a `feeds` mapping of
+label to URL. Merged feeds are always sorted newest-first. No `sort` field.
+
+**Why.** Sixteen watched repositories on sixteen rows is a list, not a panel. The
+useful question is "what shipped recently", and that needs all sixteen in one
+place. Feeds are a mapping rather than a list because the label is load-bearing: a
+version with no repository attached is not information.
+
+**Rejected.**
+
+- *One card per feed.* Technically simplest and it is what the first draft of the
+  schema already implied. It also produces sixteen rows to answer one question.
+- *A `sort` field.* There is no wrong answer to offer. Two timelines cannot be
+  concatenated, so newest-first is the only coherent merge; a knob here would only
+  allow configurations that are wrong.
+- *Keeping feed order.* That is not a merge, it is a rotation through whichever
+  repository happens to be listed first.
+
+**Consequence.** One dead feed inside a merge must not fail the card — the other
+five still have fresh entries, and a panel that goes red because one repository
+renamed its feed is a panel that gets ignored. Partial merges are the failure mode
+to design against; see `docs/06-failure-modes.md`.
+
+---
+
 ## Open questions
 
 **Default interval.** 60s is reasonable for services, excessive for releases.

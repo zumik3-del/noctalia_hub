@@ -64,6 +64,19 @@ A GUI editor remains possible later (see [07-decisions](07-decisions.md)).
 - mobile layout — the panel targets a desktop monitor
 - depending on an application's UI URL scheme for anything load-bearing —
   `deep_link` is a convenience ([D14](07-decisions.md))
+- **rendering anything the config did not describe.** A dashboard that accepts HTML
+  or a template language in its config becomes an app, and an app needs escaping, a
+  sandbox and a second security model. The config describes *data*; the panel
+  decides what data looks like. No `template:`, no inline HTML, no markdown in a
+  card body.
+
+That last one has a concrete cost worth stating plainly, because it was measured
+against a real dashboard rather than imagined. Dynacat renders PocketBase video
+summaries through a Go HTML template with thumbnails, durations, and a modal that
+renders markdown on click. The panel can read that same endpoint and show the
+title, the duration and the link. It cannot show the thumbnail or the summary
+formatting, and it never will without becoming an app. A card is a labelled
+reading, not a document.
 
 ## Done criteria
 

@@ -63,6 +63,31 @@ through.
 Messages must be actionable — not `invalid value`, but
 `unknown source type "htp" (expected: http, command, stream, rss, static)`.
 
+## One dead feed inside a merge
+
+A merged `feeds:` card survives a dead feed — the others still have entries, and
+turning the whole card red because one repository renamed its feed trains the
+operator to ignore red. But surviving is not the same as being honest, and the
+card must say which feeds answered:
+
+```
+▸ Infra releases   6 of 7 feeds   ⚠ caddy: 404 Not Found
+```
+
+Three rules, and the third is the one that matters:
+
+- **A dead feed does not fail the card.** It is annotated on the card.
+- **The count is of feeds that answered**, not feeds declared. `6 of 7` means six
+  returned something, and that number must never be the count of entries in the
+  config.
+- **All feeds dead is `down`, not an empty list.** That is the partial case's
+  opposite, and it must land differently, or a merge of one broken feed and one
+  quiet feed becomes indistinguishable from a healthy card.
+
+A quiet feed — one that returned 200 and zero new items — counts as answered. That
+is the correct answer, and it is the reason the badge says "feeds" rather than
+"new entries".
+
 ## A list that is quietly empty
 
 The nastiest failure in the panel, because nothing looks wrong.
