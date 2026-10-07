@@ -312,6 +312,105 @@ from being both a navigation target and a write target.
 
 ---
 
+## D16. Lists are a rendering kind
+
+**Decision.** `kind: list` renders an array of values. A list card is collapsed to a
+count and expands on Enter.
+
+**Why.** Some real readings are inherently plural: the top eight blocked domains,
+the hostnames Caddy routes, the branches someone is waiting on. Collapsing each of
+those into a single number is not a summary, it is information loss — there is no
+one number for "which domains is my network asking for".
+
+**Why it is a kind and not a flag.** D15's argument applies with more force here.
+`list` genuinely changes how the value is *drawn* — many rows instead of one — which
+is exactly what `kind` means and all it means. A `list:` flag on a `metric` card
+would have `kind` describing two things at once.
+
+**Colour comes from the fetch, not the contents.** A list has no thresholds. There
+is no defensible `warn` level for "here are some domain names" — a list of 400,000
+blocked domains is not a warning, it is a Tuesday. `ok` / `warn` / `down` / `stale`
+describe whether the list could be *read*. Anything else invents a judgement the
+panel has no basis for, and D5 already commits to colour meaning one thing only.
+
+**One exception, and it is not about the contents.** A list that was non-empty and
+is now empty goes `warn`, because that is a fact about the fetch, not about the
+data. An empty result from a source that has just started returning rows is fine;
+one that follows six rows is a broken card, and without this rule it looks
+identical to a healthy card reporting nothing.
+
+**Collapsed by default.** The panel is a glance, and the list is the answer to the
+follow-up question. Expanding must be deliberate or every glance costs a scroll.
+`max_items` bounds what the expand reveals, so "top 8" stays top 8 rather than
+becoming an unbounded scroll target inside a fullscreen panel.
+
+**Rejected.** A `list:` block instead of a kind — same fault as D15, `kind` stops
+meaning one thing. A `limit:`/`offset:` block for paging — the panel is not a table
+and paging invites the reader to treat it as one. Per-row colour or thresholds —
+invented semantics.
+
+**Consequence.** `extract` may now yield several values where it previously yielded
+one, so the pipeline's contract widens from "one value" to "one or many", with
+`map` and `format` applied per value. `format` on a list card is the *collapsed*
+label, not a row template. A list card that fails to fetch follows D7 and keeps its
+last good rows plus an age.
+
+---
+
+## D17. Remote containers compose; they do not get a source type
+
+**Decision.** A service inside a Proxmox LXC is read with `type: command` and an
+`argv` that runs `ssh <node> "pct exec <vmid> -- <command>"`. There is no
+`type: proxmox`, and no `parse: json` beyond what `command` needs for its own
+output.
+
+**Why.** The hop is already expressible, and a dedicated type would add schema
+surface to buy nothing. Worse, the obvious shape — `proxmox:` with a `vmid` field
+and a nested command — is a wrapper the plugin would have to keep in step with
+`command` forever, so every fix to command handling would need applying twice.
+
+**`argv` rather than `cmd`, and this matters.** With `argv`, everything after the
+host is a **single string argument**:
+
+```yaml
+argv: ["ssh", "pve.lan", "pct exec 101 -- pihole -q --list"]
+```
+
+`ssh` forwards that one argument to the remote shell verbatim, which parses it once.
+With `cmd`, the same command needs a local shell, which then has to survive being
+wrapped in quotes that the remote shell re-interprets — three layers of quoting to
+get one command through. `argv` removes a layer rather than documenting around it.
+This is the same reasoning as D12's no-interpolation rule: the fewer parsers a
+string crosses, the fewer ways it can be silently wrong.
+
+**`parse: json` is part of this, not a separate feature.** Reaching a JSON-emitting
+command is common enough (`caddy adapt`, `sqlite3 -json`, `docker inspect`) that it
+needs to be a declaration rather than a `jq` pipeline buried in a shell string.
+Once declared, the same `extract` works as it does for `http` — the pipeline does
+not know or care which source type produced the bytes.
+
+**Rejected.**
+
+- *`type: proxmox`.* A wrapper with no behaviour of its own; see above.
+- *A `proxmox:` block alongside `source:`.* Same wrapper, worse ergonomics — it puts
+  the transport in the card instead of the source, and D4 already fixed the layer
+  that fetches.
+- *`${var}` for the VMID.* No such need. Each card targets a different container,
+  so there is no repeated string to factor out, and YAML anchors cannot build one
+  from parts anyway — they merge mappings, they do not concatenate strings.
+- *Reaching the container's HTTP API directly.* Possible where the service listens
+  on a routable address, and preferable when it works. `pct exec` is the fallback
+  for services bound to localhost inside the container, which is the common case
+  for exactly the services worth watching.
+
+**Consequence.** `pct exec` gives no login shell, so PATH is minimal and
+`PATH=`-prefixing or absolute paths may be required. Its exit code does not
+distinguish "container stopped" from "command failed", so cards must let a failed
+fetch become `down` with the text in the card rather than trying to decode the
+exit status.
+
+---
+
 ## Open questions
 
 **Default interval.** 60s is reasonable for services, excessive for releases.

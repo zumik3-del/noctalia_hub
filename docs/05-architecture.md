@@ -183,8 +183,9 @@ The full-screen panel is a supported case rather than a hack: v5 handles
 5. **Hot reload.**
 6. **Actions** — `link`, `link_template`, `deep_link`, `run:` via `runInTerminal`.
 7. **Console cards** — `stream` with a ring buffer, torn down on panel close.
-8. **Card editor** — `dragSource`/`dropZone`, writing back to `hub.yaml`.
-9. **Controls** — `control:` writes, `Controls` zone, arm-confirm, action log.
+8. **List cards** — `extract` widening to many, collapsed-to-count then expand.
+9. **Card editor** — `dragSource`/`dropZone`, writing back to `hub.yaml`.
+10. **Controls** — `control:` writes, `Controls` zone, arm-confirm, action log.
 
 Steps 1–2 yield a working panel with one live source. Each source type after that is
 an independent increment.
@@ -193,9 +194,18 @@ Actions come before the editor on purpose: the panel stops being a read-only
 display one increment earlier, and that is a better time to find out whether the
 click surface is comfortable than after the drag-and-drop layout work lands.
 
+List cards are cheap — a poll like any other card, with rendering that changes only
+when the card is selected — so they ride along with wherever the pipeline already
+handles the source.
+
 Controls come last and are not on the critical path at all. They are the only
 feature in the project that can break something, so they are built once the layout
 and the click surface have settled. See [D15](07-decisions.md).
+
+Remote containers are not on this list either, because they are not a feature. A
+service in an LXC is `command` plus `ssh` plus `pct exec` in one argv element, and
+`parse: json` covers the JSON-emitting ones. No new plumbing — see
+[D17](07-decisions.md).
 
 ## Verification
 

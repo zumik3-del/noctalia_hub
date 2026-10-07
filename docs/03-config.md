@@ -150,7 +150,7 @@ domains:
 | `id` | yes | Stable key; state and interval are tracked per id |
 | `title` | yes | Name shown in the instrument row |
 | `glyph` | no | Tabler glyph; falls back to a default per `kind` |
-| `kind` | yes | Rendering only: `status` \| `metric` \| `release` \| `link` \| `graph` \| `text` \| `console` |
+| `kind` | yes | Rendering only: `status` \| `metric` \| `release` \| `link` \| `graph` \| `text` \| `console` \| `list` |
 | `span` | no | `1` or `2` — how many cells the card occupies in the flow |
 | `hidden` | no | `true` keeps the card in the config without rendering it |
 
@@ -413,6 +413,51 @@ A console card holds a process open. It should therefore declare a longer
 `stale_after_sec` than a polling card, and closing the panel should tear the stream
 down rather than leave orphaned readers behind.
 
+### kind: list
+
+A reading with more than one value in it — a top-N, a set of names, a roster.
+
+```yaml
+- id: pihole-top
+  title: top blocked
+  kind: list
+  max_items: 8
+  source:
+    type: command
+    argv: ["ssh", "pve.lan", "pct exec 101 -- sqlite3 /etc/pihole/pihole-FTL.db 'SELECT domain FROM queries GROUP BY domain ORDER BY COUNT(*) DESC LIMIT 8'"]
+    extract_lines: domain          # field per row
+```
+
+The pipeline is unchanged — `fetch → extract → map → format`. What changes is that
+`extract` may now yield **several** values instead of one. Everything downstream
+(`map`, `format`) runs once per row. See [D16](07-decisions.md).
+
+| Field | Description |
+|---|---|
+| `max_items` | Rows shown; default 10 |
+| `source.extract_lines` | Field name or index to take from each row |
+| `source.parse` | `json` when the command emits JSON, so `extract` can index it |
+
+A list card is collapsed to a count by default and expands on Enter. That is the
+only card that changes shape when selected, and the reason is capacity: the top 8
+blocked domains is worth reading, all 400,000 is not.
+
+**Colour comes from the fetch, not from the contents.** A list has no thresholds —
+there is no sensible `warn` for "here are some domain names". `ok` / `warn` /
+`down` / `stale` describe whether the list could be read at all, so a `list` card
+goes red when the command fails and never because a row looks alarming.
+
+**`format` is the collapsed label**, not the row. When collapsed the card shows the
+count; when expanded it shows the rows.
+
+```yaml
+- id: caddy-routes
+  title: caddy routes
+  kind: list
+  max_items: 6
+  format: "{n} sites"
+```
+
 ## Domain fields
 
 | Field | Description |
@@ -454,6 +499,41 @@ metadata field. Request `limit: 1` and read the count from that field — a card
 that wants one number should not transfer a page of records every thirty seconds
 to compute it. xyOps, Proxmox and GitHub all do this.
 
+A response is parsed as JSON before `extract` sees it. When a **command** already
+emits JSON, declare that rather than wrapping it in `jq`:
+
+```yaml
+source:
+  type: command
+  argv: ["caddy", "adapt", "--config", "/etc/caddy/Caddyfile"]
+  parse: json
+  extract: "[(.. | .host? // empty)] | flatten"
+```
+
+`parse: json` puts the output shape where it is fetched, instead of working around
+it with a `jq` pipeline inside a shell string whose quoting is already fragile. A
+card that has to shell out to `jq` in order to be readable is a card whose author
+will get the quoting wrong eventually.
+
+It is the same `extract` as `http` — the parser is the only difference, which is
+the point. See [D17](07-decisions.md).
+
+#### Brackets in `extract` are load-bearing
+
+`extract` is jq syntax, and jq's precedence will quietly produce a wrong answer
+rather than an error:
+
+```jq
+[.. | .host? // empty | flatten]     # WRONG — yields []
+[(.. | .host? // empty)] | flatten    # right
+```
+
+`//` binds more loosely than `|`, so the first line parses as
+`.. | (.host? // (empty | flatten))` — the `flatten` ends up inside the `empty`
+branch and never runs on real data. There is no error, no warning, and the result
+is an empty list, which for a `kind: list` card looks exactly like "there are no
+hosts". Collected and verified against real `caddy adapt` output; the failure mode
+is that a card shows nothing and looks healthy.
 
 ### command
 
@@ -472,6 +552,44 @@ source:
   type: command
   cmd: "docker ps --format '{{.Status}}' | head -1"
 ```
+
+`cmd` does not interpolate source values — same rule as `run`, see
+[D12](07-decisions.md). A value that came from an HTTP response is not your own
+typing.
+
+#### Reaching something inside a container
+
+A service in a Proxmox container is reached by sshing to the node and using
+`pct exec`. There is no `type: proxmox`. The hop composes out of the parts that
+already exist, and `argv` keeps the quoting honest:
+
+```yaml
+source:
+  type: command
+  argv: ["ssh", "pve.lan", "pct exec 101 -- pihole -q --list"]
+```
+
+Everything after the host is **one argv element**, so the remote command is passed
+as a single string to `ssh` and re-parsed once on the far side. There is no local
+shell, so there is nothing for a local quote to break. This is the whole reason to
+prefer `argv` over `cmd` for anything that crosses a hop — see
+[D17](07-decisions.md).
+
+**`pct exec` has no login shell by default**, so it does not read `.bashrc` and
+PATH may be minimal. Absolute paths, or a leading `PATH=`, matter here:
+
+```yaml
+argv: ["ssh", "pve.lan", "pct exec 101 -- /usr/bin/sqlite3 /etc/pihole/pihole-FTL.db 'SELECT ...'"]
+```
+
+Two traps specific to this hop:
+
+- **`pct exec` returns a non-zero exit code when the container is stopped**, and the
+  message goes to stderr. A card reading a stopped container shows `down` with the
+  container's own error text, which is correct and useful.
+- **`pct exec` on a running container still exits non-zero if the *command* fails**,
+  and the two are indistinguishable unless you read stderr. Do not map exit codes
+  to states; let a failed fetch become `down` and put the text in the card.
 
 ### stream
 

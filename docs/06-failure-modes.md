@@ -63,6 +63,28 @@ through.
 Messages must be actionable — not `invalid value`, but
 `unknown source type "htp" (expected: http, command, stream, rss, static)`.
 
+## A list that is quietly empty
+
+The nastiest failure in the panel, because nothing looks wrong.
+
+```
+▸ caddy routes   0 sites      ← ok, up to date, genuinely nothing
+▸ caddy routes   0 sites      ← ok, the extract silently matched nothing
+```
+
+These are identical on screen. An `extract` with a precedence slip, a renamed JSON
+field, or a service that changed its output format all produce the second one — a
+card that is fetching fine, on schedule, with a green dot, showing nothing.
+
+The rule this forces: **a list card that is empty but whose source previously
+returned rows must not report `ok`.** It goes `warn` with "no rows" and keeps the
+last good rows visible. The list existed a minute ago and now does not, and that
+transition is the signal.
+
+The general form: **a sudden drop to an empty result is a failure of the fetch, not
+a fact about the world.** A service with zero hosts is possible; a service whose
+host list went from six to zero without a deploy is a broken card.
+
 ## A failed action is not a stale reading
 
 The rule above — keep the last good value, dim it, never zero it — is right for
@@ -104,6 +126,62 @@ Not replaced with zero, not hidden:
 ```
 
 Zero is the more dangerous option here: `0 nodes` reads as the truth.
+
+## Many cards, one dead hop
+
+Six cards reading six containers on one Proxmox node share a single point of
+failure: the ssh. When the node is unreachable they all go `down` together, and the
+panel shows six red rows instead of one.
+
+That is honest but not useful, because the operator's next question is always
+"which hop broke" — and the answer is not in the rows. So:
+
+- **A failing fetch states the hop.** `pct exec 101 -- sqlite3 ...` failing on a
+  dead node produces `ssh: connect to host pve.lan port 22: No route to host`, and
+  that text goes in the card. The message names the cause.
+- **Cards sharing a source are grouped in the zone**, so the failure reads as a
+  block rather than scattered singles.
+
+What the panel does **not** do is deduce a shared cause and collapse the rows. That
+would be an inference, and an inferred "pve is down" badge on a card about Pi-hole
+is a lie the moment the node is up and Pi-hole is not.
+
+## Exit codes from a hop are not a state
+
+`pct exec` exits non-zero both when the container is stopped and when the command
+inside it failed. Same code, two very different situations, and the difference only
+appears in stderr.
+
+So a card must not map exit codes to `ok` / `warn` / `down`. A card that does gets
+"container stopped" and "sqlite3 is not installed" rendered as the same green dot.
+Instead: any non-zero exit is `down`, and stderr goes in the card verbatim. The
+operator sees `sqlite3: command not found` instead of a green light, which is the
+whole point of showing the text.
+
+## One failed row must not blank the list
+
+A `kind: list` card whose fetch fails keeps its last good rows and shows the age,
+exactly like any other reading (D7). It does **not** collapse to an empty list —
+an empty list is indistinguishable from "there genuinely are none of these things",
+which is the most dangerous possible reading of a roster.
+
+```
+▸ top blocked   8 rows   from 14:02   ⚠ ssh: No route to host
+```
+
+## A command that needs PATH
+
+`pct exec` gives no login shell, so `.bashrc` is not read and `PATH` may not
+include `/usr/local/bin` or anything a package installed outside the default set.
+A command that works perfectly over ssh and fails here is almost always this.
+
+The failure looks like a missing binary, so the card goes `down` with
+`sqlite3: not found` — a message that is literally true and practically wrong.
+Two ways out, both acceptable:
+
+- absolute paths in `argv`, which is the more honest config
+- `PATH=/usr/local/bin:$PATH` prefixed inside the remote command, if the path is
+  long enough to be unreadable inline
 
 ## Header status line
 

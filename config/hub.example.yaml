@@ -266,6 +266,116 @@ domains:
         deep_link: "https://ops.lan/#Events?sub=view&id=ev3nt_backup"
 
 
+  # ── Network ───────────────────────────────────────────────────────────────
+  # Pi-hole and Caddy, both in LXC containers on the Proxmox node.
+  #
+  # Reached with plain `command` + ssh + pct exec — there is no proxmox source
+  # type. argv keeps the quoting honest: everything after the host is ONE argv
+  # element, so ssh forwards it verbatim and only the remote shell parses it.
+  # See D17.
+  - id: network
+    title: Network
+    glyph: network
+    interval_sec: 120
+    stale_after_sec: 600
+
+    cards:
+      # --- Pi-hole ------------------------------------------------------------
+      # COUNT(DISTINCT domain), not COUNT(*). The gravity table's uniqueness is
+      # enforced on the (domain, adlist_id) PAIR, not on domain alone — a domain
+      # that appears in three subscribed lists occupies three rows. Counting rows
+      # therefore counts list overlap, not domains. Verified: a test fixture with
+      # one domain in two lists reports 4 rows and 3 domains.
+      - id: pihole-gravity
+        title: gravity
+        glyph: shield-check
+        kind: metric
+        source:
+          type: command
+          argv: ["ssh", "pve.lan",
+                 "pct exec 101 -- sqlite3 /etc/pihole/pihole-FTL.db 'SELECT COUNT(DISTINCT domain) FROM gravity'"]
+        format: "{n} domains"
+        thresholds: { warn: 200000, critical: 400000 }
+        graph: 96
+
+      # Blocked today. Pi-hole's status codes are not "1 = blocked" — they are
+      # a documented enum where 2 and 3 are ALLOWED and 9-11 are blocked
+      # during CNAME inspection. Counting `status != 2` therefore counts
+      # things that were let through. The correct test is the negative of the
+      # allowed set.
+      - id: pihole-blocked
+        title: blocked 24h
+        glyph: shield-x
+        kind: metric
+        source:
+          type: command
+          argv: ["ssh", "pve.lan",
+                 "pct exec 101 -- sqlite3 /etc/pihole/pihole-FTL.db \"SELECT COUNT(*) FROM queries WHERE timestamp > strftime('%s','now','-1 day') AND status NOT IN (0,2,3,12,13,14,17)\""]
+        format: "{n}"
+        thresholds: { warn: 5000, critical: 20000 }
+        graph: 96
+
+      # kind: list. This is what the panel has no other way to show: not one
+      # number but the names themselves.
+      #
+      # `parse: json` because sqlite3 emits JSON with -json. Declaring it keeps
+      # the shape in the source instead of a jq pipeline in a shell string.
+      - id: pihole-top
+        title: top blocked
+        glyph: list-numbers
+        kind: list
+        max_items: 8
+        format: "{n} seen"
+        source:
+          type: command
+          argv: ["ssh", "pve.lan",
+                 "pct exec 101 -- sqlite3 -json /etc/pihole/pihole-FTL.db \"SELECT domain, COUNT(*) AS n FROM queries WHERE timestamp > strftime('%s','now','-1 day') AND status NOT IN (0,2,3,12,13,14,17) GROUP BY domain ORDER BY n DESC LIMIT 8\""]
+          parse: json
+          extract: ".[*]"
+
+      # --- Caddy --------------------------------------------------------------
+      # caddy adapt is the honest read: it is Caddy's own parser, so what the
+      # card shows is the configuration Caddy would actually serve, not a
+      # guess at what the Caddyfile text means.
+      - id: caddy-routes
+        title: caddy routes
+        glyph: route
+        kind: list
+        max_items: 8
+        format: "{n} sites"
+        source:
+          type: command
+          argv: ["ssh", "pve.lan",
+                 "pct exec 102 -- caddy adapt --config /etc/caddy/Caddyfile --adapter caddyfile"]
+          parse: json
+          # `..` walks every level and `.host?` ignores the non-matching ones, so
+          # this survives Caddy renaming srv0 and survives a change in nesting
+          # depth. A hard path like `.apps.http.servers.srv0.routes` breaks the
+          # day Caddy emits servers in a different order.
+          #
+          # The brackets around the recursion are load-bearing. jq's `//` binds
+          # more loosely than `|`, so `[.. | .host? // empty | flatten]` parses as
+          # `.. | (.host? // (empty | flatten))` and the flatten never runs —
+          # it silently yields an empty list. Collecting first and flattening
+          # after is the only form that works. Verified against adapted JSON with
+          # servers renamed and with host wrapped in an extra object.
+          extract: "[(.. | .host? // empty)] | flatten"
+
+      - id: caddy-count
+        title: proxied
+        glyph: world
+        kind: metric
+        span: 2
+        source:
+          type: command
+          argv: ["ssh", "pve.lan",
+                 "pct exec 102 -- caddy adapt --config /etc/caddy/Caddyfile --adapter caddyfile"]
+          parse: json
+          extract: "[(.. | .host? // empty)] | flatten | length"
+        format: "{n} hostnames"
+        thresholds: { warn: 60, critical: 100 }
+
+
   # ── Links ─────────────────────────────────────────────────────────────────
   - id: links
     title: Links
