@@ -464,6 +464,68 @@ to design against; see `docs/06-failure-modes.md`.
 
 ---
 
+## D20. The panel invokes other panels; it never mounts them
+
+**Decision.** A card may declare `panel: "<id> [context]"`, which runs
+`noctalia msg panel-open` directly through `runAsync` and opens no terminal
+window. Panel ids are validated at load time against the shell's own registry.
+Mounting another plugin's surface inside the panel is out of reach entirely.
+
+**Why a separate field when `run` already does this.** `run: "noctalia msg
+panel-open control-center calendar"` works. It also flashes a terminal window open
+to display the word `ok`, because `run`'s whole contract is that the user asked to
+watch a command run. A command that returns instantly and prints nothing anyone
+reads is not delegation, it is a regression wearing delegation's clothes. The two
+actions share a mechanism and must not share a cost model.
+
+**`panel-open`, not `togglePanel`.** The Lua API only offers `togglePanel`, which
+inverts — two presses and the panel closes. Every community plugin that opens
+panels programmatically moved to `panel-open`, and `cider` documents the swap in
+its README. Idempotence is the whole reason the CLI command exists.
+
+**Panels cannot be embedded, and this is not an effort question.** There is no
+WebView, no iframe and no HTML in `plugin_api` 32 — the panel is a declarative
+`ui.*` tree and a plugin's panel is its own surface. Noctalia's calendar and
+weather live inside the `location` bar widget and are reachable only as
+control-center sections; their data is held in memory, fetched from CalDAV or
+Google, with nothing in `state.toml` but discovery metadata. There is no file to
+read and no surface to mount.
+
+**There is no generic way to read another plugin's data.** `noctalia.state` is a
+shared key-value store — that is how a plugin's `service.luau` talks to its own
+`panel.luau` — so a hub *could* read a key another plugin chose to publish. But
+there is no discovery, no schema and no negotiation: it works only for a plugin
+that published a key the hub already knows by name. That is a private convention,
+not an API.
+
+**What does work for cross-plugin communication** is
+`noctalia msg plugin <author/plugin:entry> <target> <event> [payload]`, which
+dispatches an event to a plugin entry. It is one-way and opt-in: the receiving
+entry must implement an `onIpc` callback, and the shell distinguishes "no entry
+matched", "entry not ready" and "entry has no `onIpc`". Recorded rather than
+exposed in the schema — a card cannot send an event and get a result back, so it
+would be an action with no observable outcome.
+
+**Rejected.**
+
+- *A `plugin:` block with `entry`, `event` and `payload`.* An action with no
+  return path. The panel could tell the user it dispatched something and have no
+  idea whether anything happened, which is the "rejected write" failure mode from
+  D15 with none of the confirmation that makes it survivable.
+- *Mounting a panel's contents.* No API exists. Recording it as out of scope
+  stops the question being reopened every time someone asks for an embed.
+- *Reading another plugin's state keys as a data source.* It works until the other
+  plugin renames a key, and nothing detects that. A card that silently shows stale
+  data because a neighbour changed its internals is worse than no card.
+
+**Consequence.** Panel ids are **checkable**: the shell validates and, on failure,
+lists every panel that exists. A typo becomes a config error on the offending card
+rather than a click that does nothing. Contexts are **not** checkable — an invalid
+section exits `0` and prints `ok`. The panel id is the plugin's problem; the
+context is the config author's.
+
+---
+
 ## Open questions
 
 **Default interval.** 60s is reasonable for services, excessive for releases.
@@ -475,3 +537,17 @@ possibly virtualisation will be needed. The actual limit is unknown.
 
 **Desktop widget.** A separate `desktop_widget.luau` showing the same summary as the
 bar indicator. Useful only if the bar widget is not enough — an open question.
+
+**Splitting a text row into fields.** `kind: list` takes one field per row, so
+`sqlite3 -separator '|'` works. It cannot split a row that arrived as a single
+line of comma-separated text, nor strip a prefix — which is exactly what the
+discoverable panel registry needs (`03-config.md`, D20). A `split:` field would
+close it. Leaning yes, because the same gap blocks any list built from text rather
+than from JSON, and the current answer is a `sed` in a shell string, which is the
+quoting this project keeps refusing.
+
+**Sending an event to another plugin.** `noctalia msg plugin <entry> <target>
+<event> [payload]` works and is one-way. D20 rejected it as a card action because
+there is no return path, but a `notify:`-shaped use — wake a plugin, ask it to
+refresh — is not an action and might deserve a card field later. Needs a use case
+before it earns a field.

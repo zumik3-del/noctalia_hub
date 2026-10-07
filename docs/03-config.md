@@ -198,10 +198,11 @@ A card can do something on click. **At most one action per card**, drawn from:
 | `link` | string | Open a URL |
 | `link_template` | string | Open a URL built from extracted fields |
 | `deep_link` | string | Open a URL built from the source's own query plus extracted fields |
+| `panel` | string | Open another Noctalia panel |
 | `run` | string | Run a shell command in the user's terminal |
 | `control` | block | Write to a remote system |
 
-The first four navigate or launch. `control` is the only one that changes
+The first five navigate or launch. `control` is the only one that changes
 something, and it is the only one that takes a block rather than a string. See
 [D15](07-decisions.md).
 
@@ -209,6 +210,93 @@ Two actions on one card is a validation error, not a silent precedence rule. A c
 whose click target is ambiguous is a card nobody trusts. `control` is in this list
 for exactly that reason — a card with both a `link` and a `control` would be a
 card that does two different things on the same click.
+
+### panel — open another Noctalia surface
+
+The shell already has panels: a launcher, a control center, a clipboard history, and
+whatever your own plugins register. `panel` opens one of them.
+
+```yaml
+- id: go-calendar
+  title: Calendar
+  glyph: calendar
+  kind: link
+  source: { type: static, value: "—" }
+  panel: "control-center calendar"
+```
+
+That is `noctalia msg panel-open control-center calendar`, run directly:
+
+```lua
+noctalia.runAsync({ "noctalia", "msg", "panel-open", "control-center", "calendar" })
+```
+
+**`panel` and `run` are different even though both end up in `runAsync`.** `run`
+opens a terminal window, because the user asked to see a command run. `panel`
+opens a panel and nothing else — the command returns immediately, prints nothing
+anyone reads, and a terminal window flashing open to display `ok` is a bug, not
+delegation.
+
+**Use `panel-open`, never `togglePanel`.** The API offers `noctalia.togglePanel`,
+which inverts: press it twice and the panel closes. Every plugin that opens
+panels programmatically switched to `panel-open` for this reason, and `cider`
+documents the swap outright. `panel-open` is idempotent — it brings a panel
+forward instead of inverting it.
+
+Panels come in two spellings:
+
+| Id | Example |
+|---|---|
+| Built-in | `launcher`, `control-center`, `clipboard`, `polkit`, `session`, `wallpaper` |
+| A plugin's panel | `author/plugin:panel` |
+
+There is **no standalone `calendar` or `weather` panel**. Both are sections of the
+control center, reached through the optional context argument:
+
+```yaml
+panel: "control-center calendar"
+panel: "control-center weather"
+panel: "launcher /downloads"
+```
+
+The context is what makes this useful, and it is also the one part the plugin
+cannot check. A valid panel with a nonsense context exits `0` and prints `ok`,
+doing nothing. Only the panel id is verifiable — see below. A config author owns
+that argument.
+
+#### Panel ids are checkable
+
+Noctalia validates the id and, on failure, lists everything that exists:
+
+```
+$ noctalia msg panel-open nosuch/plugin:panel
+error: unknown panel "nosuch/plugin:panel" (available: clipboard,
+control-center, launcher, polkit, session, tray-drawer, wallpaper,
+pozzoo/hassio:entity_manager, ...)
+```
+
+Two things follow. A panel id in `hub.yaml` is a **validation-time check**, not a
+guess — a typo is reported on the offending card, alongside the other config
+errors. And because the registry is enumerable, `parse: stderr` can read it.
+
+That second one is a deliberate hack on a missing API, and it is documented as one
+because there is no `listPanels` and parsing an error message is not a dependency a
+card should take quietly:
+
+```yaml
+source:
+  type: command
+  argv: ["noctalia", "msg", "panel-open", "__probe__"]
+  parse: stderr
+```
+
+**This one does not work yet, and the reason is a real schema gap.** The registry
+arrives as a single line — `error: unknown panel "..." (available: a, b, c)` — and
+`kind: list` can take one field per row but has no way to split a row into fields
+or to strip a prefix. Turning that line into a list of panel ids needs three
+operations the schema does not have. It is left in the open questions rather than
+papered over with a `sed`, because a card that works only until the shell rewords
+its error message is worse than no card.
 
 ### control — a flag, not a kind
 
@@ -539,6 +627,13 @@ will get the quoting wrong eventually.
 
 It is the same `extract` as `http` — the parser is the only difference, which is
 the point. See [D17](07-decisions.md).
+
+`parse` has three values, not two: `json` reads stdout as JSON, `stderr` reads
+stderr instead of stdout, and `stdout` is the default. The `stderr` case exists
+because a fair number of tools report the thing you want on the error stream —
+`noctalia msg panel-open` lists the available panels there, and `git` puts its
+advice there. A card that has to merge stderr into stdout with `2>&1` in a shell
+string is a card with quoting in it, which is what `argv` was supposed to avoid.
 
 #### Brackets in `extract` are load-bearing
 

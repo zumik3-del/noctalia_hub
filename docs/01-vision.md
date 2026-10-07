@@ -64,6 +64,13 @@ A GUI editor remains possible later (see [07-decisions](07-decisions.md)).
 - mobile layout — the panel targets a desktop monitor
 - depending on an application's UI URL scheme for anything load-bearing —
   `deep_link` is a convenience ([D14](07-decisions.md))
+- **embedding another plugin's surface.** There is no WebView, no iframe and no
+  HTML in `plugin_api` 32, so mounting a panel inside a panel is not a design
+  choice — it is absent. The panel can *open* other panels ([D20](07-decisions.md));
+  it cannot contain them.
+- **reading another plugin's data.** `noctalia.state` is shared, so a known key is
+  readable, but there is no discovery and no schema. A private convention is not
+  an API.
 - **rendering anything the config did not describe.** A dashboard that accepts HTML
   or a template language in its config becomes an app, and an app needs escaping, a
   sandbox and a second security model. The config describes *data*; the panel

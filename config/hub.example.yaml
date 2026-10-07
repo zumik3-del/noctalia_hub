@@ -427,6 +427,63 @@ domains:
         thresholds: { warn: 60, critical: 100 }
 
 
+  # ── Shell ─────────────────────────────────────────────────────────────────
+  # Other Noctalia surfaces, reached by `panel:`. Not a link and not a `run:` —
+  # `run` opens a terminal window, and a window flashing open to print "ok" is a
+  # regression, not delegation. See D20.
+  #
+  # There is no standalone calendar or weather panel: both are sections of the
+  # control center, reached through the context argument.
+  - id: shell
+    title: Shell
+    glyph: apps
+    stale_after_sec: 900
+
+    cards:
+      - id: go-calendar
+        title: Calendar
+        glyph: calendar
+        kind: link
+        description: Upcoming events, from the control center
+        source: { type: static, value: "—" }
+        panel: "control-center calendar"
+
+      - id: go-weather
+        title: Weather
+        glyph: cloud
+        kind: link
+        description: Current conditions, from the control center
+        source: { type: static, value: "—" }
+        panel: "control-center weather"
+
+      - id: go-launcher
+        title: Launcher
+        glyph: search
+        kind: link
+        description: Application launcher
+        source: { type: static, value: "—" }
+        panel: "launcher"
+
+      # A plugin's panel is addressed as author/plugin:panel. If that plugin is
+      # not installed the id does not resolve — and the panel checks ids at load
+      # time, so this card fails validation with the name it looked for rather
+      # than waiting for a click.
+      - id: go-hassio
+        title: Home Assistant
+        glyph: home-assistant
+        kind: link
+        description: Entity manager from the hassio plugin
+        source: { type: static, value: "—" }
+        panel: "pozzoo/hassio:entity_manager"
+
+      # The panel registry IS discoverable — a bad id makes the shell list every
+      # panel that exists — but it is deliberately not a card here. The list
+      # arrives as one line of comma-separated text with a prefix, and `kind:
+      # list` has no way to split a row into fields. Shipping it would mean
+      # three undocumented transformations and a card that breaks silently when
+      # the shell rewords its error. See docs/03-config.md and the open questions.
+
+
   # ── Links ─────────────────────────────────────────────────────────────────
   - id: links
     title: Links

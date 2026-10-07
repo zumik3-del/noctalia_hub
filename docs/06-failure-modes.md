@@ -88,6 +88,31 @@ A quiet feed — one that returned 200 and zero new items — counts as answered
 is the correct answer, and it is the reason the badge says "feeds" rather than
 "new entries".
 
+## A panel action that silently does nothing
+
+`panel-open` validates the panel id and refuses loudly. It does **not** validate
+the context:
+
+```
+$ noctalia msg panel-open control-center nosuchsection
+ok
+```
+
+Exit code `0`, no message, no panel section. Every other action in the panel has a
+visible outcome — a link opens a browser, `run` opens a terminal, a failed
+`control` turns the row red. A `panel:` with a bad context is the one that
+reports success and delivers nothing.
+
+So the split is deliberate and worth stating: **the panel id is the plugin's
+responsibility and is checked at load; the context is the config author's, and
+cannot be checked.** A card pointing at a section that no longer exists fails the
+way a typo in a URL fails — silently, and only when someone presses it.
+
+There is no fix inside the panel. The shell has no way to ask which contexts a
+panel accepts. What the panel can do is refuse to invent a context that was never
+declared, which is why the field is a plain string rather than an enum with
+plausible-looking values to choose from.
+
 ## A list that is quietly empty
 
 The nastiest failure in the panel, because nothing looks wrong.

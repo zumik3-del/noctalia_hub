@@ -90,8 +90,22 @@ end
 | `noctalia.pluginDataDir()` | Converted-JSON cache, history |
 | `noctalia.tr(key, subst)` | i18n |
 | `noctalia.notify` / `noctalia.notifyError` | Alerts |
-| `noctalia.togglePanel(id)` | Opening the panel |
+| `noctalia.togglePanel(id)` | Opening **this** plugin's panel — not used, see below |
 | `ui.*` | Declarative tree |
+
+Opening *another* panel goes through the shell, not the API:
+
+| Command | Purpose |
+|---|---|
+| `noctalia msg panel-open <id> [context]` | `panel:` actions — idempotent |
+| `noctalia msg panel-close <id>` | Closing on panel teardown |
+| `noctalia msg plugins list` | Discovering installed plugins |
+| `noctalia msg settings-open-plugin <id>` | Another plugin's settings |
+
+`noctalia.togglePanel` is deliberately unused. It inverts, so pressing a card twice
+closes the panel the first press opened; the shell command brings a panel forward
+instead. Every community plugin that opens panels programmatically made the same
+swap — see [D20](07-decisions.md).
 
 Types: `noctalia.d.luau` from the official plugins repository.
 
@@ -105,6 +119,13 @@ you check:
 | PTY / stdin handle | No embedded terminal. `runInTerminal` delegates to a real window |
 | Write path into `runStream` | Console cards are read-only tails |
 | Process resize, raw mode | Nothing to feed a `vim` inside the panel |
+| WebView / iframe / HTML | No embedding — not of a URL, not of another plugin's panel |
+| `openPanel`, panel registry query | `togglePanel` only inverts; the shell has the rest |
+| Cross-plugin data read | `state` is shared but has no discovery and no schema |
+
+All four absences are closed, not deferred. The first three are why the API table
+above is the whole surface; the last two are recorded in
+[D20](07-decisions.md).
 
 `runInTerminal` is guarded by a feature check, following `tailscale` in
 `community-plugins`:
