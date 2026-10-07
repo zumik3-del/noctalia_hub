@@ -1,0 +1,46 @@
+id = "zumik3-del/hub"
+name = "Hub"
+version = "0.1.0"
+plugin_api = 32
+author = "zumik3-del"
+license = "MIT"
+icon = "gauge"
+tags = ["bar", "panel", "service", "indicator", "utility", "system"]
+description = "Full-screen instrument panel: service status, metrics, releases and links from one YAML file."
+dependencies = ["yq"]
+
+# Not implemented yet — this manifest records the design decisions.
+# See docs/05-architecture.md
+
+[[widget]]
+id = "summary"
+entry = "widget.luau"
+
+  [[widget.setting]]
+  key = "glyph"
+  type = "glyph"
+  label_key = "settings.glyph.label"
+  description_key = "settings.glyph.description"
+  default = "gauge"
+
+  [[widget.setting]]
+  key = "compact"
+  type = "bool"
+  label_key = "settings.compact.label"
+  description_key = "settings.compact.description"
+  default = false
+
+[[panel]]
+id = "panel"
+entry = "panel.luau"
+width = "fill"
+height = "fill"
+placement = "floating"
+position = "center"
+persistent = true
+keyboard_focus = "exclusive"
+capture_keys = ["escape", "r", "slash", "question"]
+
+[[service]]
+id = "collector"
+entry = "service.luau"

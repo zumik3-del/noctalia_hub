@@ -1,0 +1,225 @@
+# noctalia_hub — example config
+#
+# Copy to ~/.config/noctalia/hub/hub.yaml and edit by hand.
+# The plugin reloads the file automatically when it changes.
+#
+# Secrets live in hub.secrets.yaml; only ${name} references go here.
+#
+# Field reference: docs/03-config.md
+
+version: 1
+
+layout:
+  density: compact          # compact | comfortable
+  show_header: true
+  clock: "%H:%M:%S"
+  stale_badge: true
+
+defaults:
+  interval_sec: 60
+  timeout_ms: 8000
+  stale_after_sec: 300
+  graph_points: 48
+
+
+domains:
+  # ── Infrastructure ────────────────────────────────────────────────────────
+  - id: infra
+    title: Infrastructure
+    glyph: server
+    refresh: 30
+
+    cards:
+      - id: dynacat
+        title: Dynacat
+        glyph: cat
+        kind: status
+        link: https://dynacat.lan
+        source:
+          type: http
+          url: https://dynacat.lan/health
+          ok_when: "status == 200"
+
+      - id: proxmox-nodes
+        title: Proxmox
+        glyph: hexagon
+        kind: metric
+        span: 2
+        source:
+          type: http
+          url: https://pve.lan:8006/api2/json/cluster/resources
+          auth: { token: "${proxmox_token}" }
+          extract: ".data | length"
+        format: "{n} nodes"
+        thresholds: { warn: 6, critical: 8 }
+        graph: true
+
+      - id: proxmox-mem
+        title: Memory
+        glyph: database
+        kind: metric
+        source:
+          type: http
+          url: https://pve.lan:8006/api2/json/cluster/resources
+          auth: { token: "${proxmox_token}" }
+          extract: ".data | map(select(.type == \"node\")) | map(.mem) | add // 0"
+        format: "{n} MB"
+        thresholds: { warn: 24000, critical: 30000 }
+        graph: 96
+
+      - id: plex
+        title: Plex
+        glyph: brand-plex
+        kind: status
+        source:
+          type: http
+          url: https://pve.lan:8006/api2/json/nodes/pve/status
+          auth: { token: "${proxmox_token}" }
+          ok_when: "status == 'running'"
+
+      - id: sonarr
+        title: Sonarr
+        glyph: download
+        kind: status
+        source:
+          type: http
+          url: https://pve.lan:8006/api2/json/nodes/pve/status
+          auth: { token: "${proxmox_token}" }
+          ok_when: "status == 'running'"
+
+      - id: link-proxmox
+        title: Proxmox
+        glyph: external-link
+        kind: link
+        link: https://pve.lan:8006
+        source: { type: static, value: "—" }
+
+      # run: opens a terminal window — it does not embed one. The string is
+      # passed to the shell verbatim and never interpolates source values.
+      - id: pve-ssh
+        title: pve.lan
+        glyph: ssh
+        kind: status
+        run: "ssh root@pve.lan"
+        source:
+          type: command
+          argv: ["ping", "-c", "1", "-W", "2", "pve.lan"]
+
+      # kind: console is a read-only tail. No input, no PTY — see D13.
+      - id: pve-journal
+        title: pve journal
+        glyph: file-text
+        kind: console
+        stale_after_sec: 3600
+        source:
+          type: stream
+          cmd: "journalctl -u pveproxy -f -o cat -n 20"
+          pick: last
+          lines: 12
+
+
+  # ── Releases ──────────────────────────────────────────────────────────────
+  - id: releases
+    title: Releases
+    glyph: tag
+    interval_sec: 900
+
+    cards:
+      - id: opencode
+        title: OpenCode
+        kind: release
+        source:
+          type: rss
+          url: https://github.com/zumik3-del/opencode/releases.atom
+          pick: first
+          tag: title
+        link_template: "https://github.com/zumik3-del/opencode/releases/tag/{tag}"
+
+      - id: noctalia
+        title: Noctalia
+        kind: release
+        source:
+          type: rss
+          url: https://github.com/noctalia-dev/noctalia/releases.atom
+          pick: first
+          tag: title
+        link_template: "https://github.com/noctalia-dev/noctalia/releases/tag/{tag}"
+
+      - id: kitty
+        title: Kitty
+        kind: release
+        source:
+          type: rss
+          url: https://github.com/kovidgoyal/kitty/releases.atom
+          pick: first
+          tag: title
+        link_template: "https://github.com/kovidgoyal/kitty/releases/tag/{tag}"
+
+
+  # ── Repositories ──────────────────────────────────────────────────────────
+  - id: git
+    title: Watching
+    glyph: git-branch
+    stale_after_sec: 900
+
+    cards:
+      - id: opencode-ci
+        title: opencode
+        kind: status
+        link: https://github.com/zumik3-del/opencode/actions
+        source:
+          type: command
+          argv: ["gh", "run", "list", "--limit", "1",
+                 "--json", "conclusion", "-q", ".[0].conclusion"]
+        map:
+          success: ok
+          failure: down
+          cancelled: warn
+
+      - id: hub-prs
+        title: hub PRs
+        kind: metric
+        source:
+          type: command
+          cmd: "gh pr list --repo zumik3-del/noctalia_hub --json number -q 'length'"
+        thresholds: { warn: 3, critical: 10 }
+        link: https://github.com/zumik3-del/noctalia_hub/pulls
+
+      - id: disk-home
+        title: Disk /
+        glyph: hard-drive
+        kind: metric
+        source:
+          type: command
+          cmd: "df -P /home | tail -1 | awk '{print 100 - $5}'"
+        format: "{n}%"
+        thresholds: { warn: 85, critical: 93 }
+        graph: 48
+
+
+  # ── Links ─────────────────────────────────────────────────────────────────
+  - id: links
+    title: Links
+    glyph: link
+
+    cards:
+      - id: link-grafana
+        title: Grafana
+        glyph: chart-line
+        kind: link
+        link: https://grafana.home.lan
+        source: { type: static, value: "—" }
+
+      - id: link-uptime
+        title: Uptime
+        glyph: activity
+        kind: link
+        link: https://uptime.home.lan
+        source: { type: static, value: "—" }
+
+      - id: link-ha
+        title: Home Assistant
+        glyph: home-assistant
+        kind: link
+        link: https://ha.home.lan
+        source: { type: static, value: "—" }

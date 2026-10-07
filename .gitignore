@@ -1,0 +1,19 @@
+# Agent instructions (local-only, not committed)
+AGENTS.md
+
+# Local plugin settings (user state, not committed)
+settings.json
+
+# Secrets must never be committed
+hub.secrets.yaml
+*.secrets.yaml
+
+# OS / editor junk
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# Logs and scratch
+*.log
+.cache/
