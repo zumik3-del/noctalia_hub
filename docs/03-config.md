@@ -177,15 +177,69 @@ domains:
 
 A card can do something on click. **At most one action per card**, drawn from:
 
-| Field | Description |
-|---|---|
-| `link` | Open a URL |
-| `link_template` | Open a URL built from extracted fields |
-| `deep_link` | Open a URL built from the source's own query plus extracted fields |
-| `run` | Run a shell command in the user's terminal |
+| Field | Kind | Effect |
+|---|---|---|
+| `link` | string | Open a URL |
+| `link_template` | string | Open a URL built from extracted fields |
+| `deep_link` | string | Open a URL built from the source's own query plus extracted fields |
+| `run` | string | Run a shell command in the user's terminal |
+| `control` | block | Write to a remote system |
+
+The first four navigate or launch. `control` is the only one that changes
+something, and it is the only one that takes a block rather than a string. See
+[D15](07-decisions.md).
 
 Two actions on one card is a validation error, not a silent precedence rule. A card
-whose click target is ambiguous is a card nobody trusts.
+whose click target is ambiguous is a card nobody trusts. `control` is in this list
+for exactly that reason — a card with both a `link` and a `control` would be a
+card that does two different things on the same click.
+
+### control — a flag, not a kind
+
+A card that can write does not become a different kind of card. `kind` keeps its
+single meaning, "how to draw the reading", exactly as [D4](07-decisions.md)
+established. What the card *does* is an orthogonal axis, like `thresholds`:
+
+```yaml
+- id: plex
+  title: Plex
+  glyph: server
+  kind: status                    # unchanged — this is still a status reading
+  source:
+    type: http
+    url: https://pve.lan:8006/api2/json/nodes/pve/status/104/status
+    auth: { token: "${proxmox_token}" }
+    extract: ".status"
+  map:
+    running: ok
+    stopped: warn
+  control:
+    type: http
+    url: https://pve.lan:8006/api2/json/nodes/pve/status/104/status/reboot
+    method: POST
+    auth: { token: "${proxmox_token}" }
+    expect: '"code == 0"'
+  confirm:
+    target: "plex @ pve.lan"
+    effect: "LXC restart"
+```
+
+The row renders exactly as it would without `control:` — glyph, title, value, state,
+age. Only what Enter does changes. The renderer gains no new branch.
+
+This is what keeps the control honest: the card shows the state of the thing you
+are about to change. A button labelled "restart plex" on its own does not tell you
+whether plex is currently running, which is exactly the information you need before
+pressing it.
+
+`confirm` is required whenever `control` is present. `control` and `run` are not
+interchangeable despite both "running a command": `run` executes a local string
+that the config author typed, `control` writes to a system the panel does not own.
+They carry different risk and get different confirmation rules.
+
+Controls belong in a `Controls` zone. That is where the separation happens — not
+in the card kind, which is what makes it possible for one card to be both the
+reading and the thing you act on.
 
 ### deep_link — the metric and its target are one fact
 

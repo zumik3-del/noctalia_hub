@@ -246,12 +246,13 @@ convenience, never as the only path to a number.
 
 ---
 
-## D15. Controls live in their own zone and are a later version
+## D15. Controls are a flag, in their own zone, and a later version
 
 **Decision.** A card may declare a `control:` block that writes to a remote system.
-Controls are grouped in a dedicated `Controls` zone, arm-confirm is mandatory for
-destructive ones, the write result becomes the card value, and every action is
-logged. Deferred until after hot reload and the card editor.
+Controls are grouped in a dedicated `Controls` zone, arm-confirm is mandatory, the
+write result becomes the card value, and every action is logged. `control` is a
+**flag, not a card kind** — `kind` keeps its single meaning, "how to draw the
+reading". Deferred until after hot reload and the card editor.
 
 **Why.** The instrument-panel metaphor was never only gauges, and the panel was
 going to be read-only, which turns out to be the wrong instinct: the natural click
@@ -275,14 +276,22 @@ in the panel: the response of the write becomes the card's value.
 
 **Rejected.**
 
+- *`kind: action`.* A separate card kind. It would give `kind` two meanings — "how
+  to draw a reading" and "what this card is for" — which is the exact collapse D4
+  avoided when it made `kind` affect rendering only. Every future kind would then
+  have to be sorted into one bucket or the other. It also costs a new rendering
+  mode for no gain, and it loses the thing that makes a control honest: a button
+  labelled "restart plex" does not tell you whether plex is running right now,
+  which is exactly what you need to know before pressing it. The separation the
+  separate kind was meant to provide is already provided by the `Controls` zone.
+- *`control` and `run` as one field.* Both "run a command", but `run` executes a
+  local string the config author typed, and `control` writes to a system the panel
+  does not own. Different risk, different confirmation rules, different secrets.
+
 - *Confirmation via a host dialog.* There is none. `plugin_api` 32 has no
   `confirm`, no modal — the only host-provided dialog is `openColorPicker`, which
   exists because it is a built-in picker, not something a plugin composes. The
   two-step has to be built inside the panel.
-- *Reusing `run:` for writes.* `run` runs a local shell command and is trusted
-  input verbatim. A remote write is a different risk class with different
-  confirmation and logging requirements. Pretending they are the same field is how
-  a reboot ends up one stray keystroke away.
 
 **Consequence.** Two things this decision breaks, on purpose:
 
@@ -296,6 +305,10 @@ in the panel: the response of the write becomes the card's value.
 Control lifecycle is a second state axis, orthogonal to `ok`/`warn`/`down`/`stale`:
 `idle → armed → in-flight → ok` / `failed`. An action log ring buffer goes in the
 footer, so "who restarted pve at 3am" has an answer.
+
+**`control` joins the action mutual-exclusion set.** A card carries at most one of
+`link`, `link_template`, `deep_link`, `run`, `control`. This is what stops a card
+from being both a navigation target and a write target.
 
 ---
 
