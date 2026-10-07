@@ -181,9 +181,10 @@ The full-screen panel is a supported case rather than a hack: v5 handles
 3. **Remaining source types** — `command`, `rss`, `stream`, `static`.
 4. **Thresholds, staleness, sparklines.**
 5. **Hot reload.**
-6. **Actions** — `link`, `link_template`, `run:` via `runInTerminal`.
+6. **Actions** — `link`, `link_template`, `deep_link`, `run:` via `runInTerminal`.
 7. **Console cards** — `stream` with a ring buffer, torn down on panel close.
 8. **Card editor** — `dragSource`/`dropZone`, writing back to `hub.yaml`.
+9. **Controls** — `control:` writes, `Controls` zone, arm-confirm, action log.
 
 Steps 1–2 yield a working panel with one live source. Each source type after that is
 an independent increment.
@@ -192,8 +193,9 @@ Actions come before the editor on purpose: the panel stops being a read-only
 display one increment earlier, and that is a better time to find out whether the
 click surface is comfortable than after the drag-and-drop layout work lands.
 
-Writing to remote systems is not on this list. It is a separate capability with
-its own confirmation and logging requirements — see D14.
+Controls come last and are not on the critical path at all. They are the only
+feature in the project that can break something, so they are built once the layout
+and the click surface have settled. See [D15](07-decisions.md).
 
 ## Verification
 

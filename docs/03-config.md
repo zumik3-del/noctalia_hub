@@ -175,17 +175,100 @@ domains:
 
 ## Actions
 
-A card can do something on click. Two mutually exclusive forms.
+A card can do something on click. **At most one action per card**, drawn from:
 
 | Field | Description |
 |---|---|
 | `link` | Open a URL |
 | `link_template` | Open a URL built from extracted fields |
+| `deep_link` | Open a URL built from the source's own query plus extracted fields |
 | `run` | Run a shell command in the user's terminal |
 
-`link` and `run` cannot appear on the same card — that is a validation error, not a
-silent precedence rule. A card whose click target is ambiguous is a card nobody
-trusts.
+Two actions on one card is a validation error, not a silent precedence rule. A card
+whose click target is ambiguous is a card nobody trusts.
+
+### deep_link — the metric and its target are one fact
+
+When a card counts something, the click target should be *the same thing*. Writing
+the query twice is how a config rots:
+
+```yaml
+# two strings that must stay in sync, expressing one fact
+query: "tags:_error date:>=today"                    # for the count
+link: "https://ops.lan/#Search?result=error&date=today"   # for the click
+```
+
+Worse, the two vocabularies are rarely the same strings. xyOps, for example,
+takes `tags:_error` on its REST API and `result=error` in its UI — a mapping that
+is xyOps-internal knowledge and quietly wrong the moment xyOps changes.
+
+`deep_link` removes the duplication by exposing the source's own `query`:
+
+```yaml
+- id: xyops-failed
+  title: xyOps failed
+  glyph: alert-circle
+  kind: metric
+  source:
+    type: http
+    url: https://ops.lan/api/app/search_jobs/v1
+    headers: ["X-API-Key: ${xyops_key}"]
+    query: "tags:_error date:>=today"
+    limit: 1
+    extract: ".list.length"
+  thresholds: { warn: 1, critical: 5 }
+  deep_link: "https://ops.lan/#Search?result=error&date=today"
+```
+
+Placeholders available inside `deep_link`:
+
+| Placeholder | Expands to |
+|---|---|
+| `{query}` | the source's `query`, percent-encoded |
+| `{url}` | the source's `url` |
+| `{n}` and any other extracted field | the extracted value |
+
+**`{query}` is URL-encoded by the plugin.** A real query like
+`tags:_error date:>=today` contains a space and a `>`, neither of which is legal
+unencoded. Encoding is the plugin's job — a user who has to percent-encode a
+query by hand stops writing queries.
+
+This is deliberately generic, not an xyOps feature. Any REST source with a web UI
+and a query language gets the same benefit; see
+[an xyOps card](../config/hub.example.yaml) for a worked one.
+
+### A worked example: counting failed jobs
+
+The full round trip, because it is the shape most real cards want:
+
+```yaml
+- id: xyops-failed
+  title: xyOps failed
+  kind: metric
+  source:
+    type: http
+    method: GET
+    url: https://ops.lan/api/app/search_jobs/v1
+    headers: ["X-API-Key: ${xyops_key}"]
+    query: "tags:_error date:>=today"
+    limit: 1                      # fetch one row, read the count from list.length
+    extract: ".list.length"
+  thresholds: { warn: 1, critical: 5 }
+  deep_link: "https://ops.lan/#Search?result=error&date=today"
+```
+
+`limit: 1` with the count read from the response metadata is the difference
+between one number and a page of job records. When a REST API returns a total
+alongside the rows, ask for the rows you need and take the total from the header
+field.
+
+**A caveat about deep links in general.** UI URLs are an application's private
+business. xyOps documents its REST API thoroughly and documents its `#Page?args`
+URL scheme not at all — the scheme above was read out of its source. It works, and
+it may change without notice. A `deep_link` that stops resolving shows an
+ordinary page, never an error, so a stale one is invisible until you notice you
+landed somewhere unexpected.
+
 
 ```yaml
 - id: pve-ssh
@@ -301,8 +384,22 @@ source:
   body: ""
   follow_redirects: true
   allow_insecure_tls: false
+  query: "scope=all&since=24h"   # appended to the URL, percent-encoded by the plugin
+  limit: 1                       # ask the server for fewer rows
+  select: ["id", "code"]         # request only these fields, where supported
   extract: ".data | length"
 ```
+
+`query` is a convenience for APIs that take query-string parameters. It is
+URL-encoded for you, so write `&` and spaces normally. `extract` is applied to the
+parsed response body.
+
+**When an API returns a total alongside its rows, use it.** Most REST search
+endpoints return both the page of records and the overall match count in a
+metadata field. Request `limit: 1` and read the count from that field — a card
+that wants one number should not transfer a page of records every thirty seconds
+to compute it. xyOps, Proxmox and GitHub all do this.
+
 
 ### command
 

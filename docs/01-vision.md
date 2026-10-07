@@ -44,17 +44,26 @@ A GUI editor remains possible later (see [07-decisions](07-decisions.md)).
 **In:**
 
 - full-screen panel with zones grouped by domain
-- card kinds: status, metric, release, link, graph, text
+- card kinds: status, metric, release, link, graph, text, console
 - source types: HTTP, command, line stream, RSS, static value
+- click actions: `link`, `link_template`, `deep_link`, `run`
 - compact bar summary widget
 - hotkey to open the panel
 
+**Later, in a named version** — recorded so it is not a surprise when it lands:
+
+- `control:` cards that write to remote systems, in their own `Controls` zone with
+  mandatory arm-confirm and an action log ([D15](07-decisions.md))
+- a GUI card editor writing back to `hub.yaml` ([D9](07-decisions.md))
+
 **Out:**
 
-- executing remote commands from the panel (only local `command` sources)
-- write access to sources — the panel reads; control belongs to dedicated plugins like `opnsense`
+- write access to *read* sources. A card reads or has a `control:`; it never both
+  implicitly, and a control is never a side effect of polling
 - aggregating several hosts into one "cluster" — sources are addressed by URL, grouping is visual only
 - mobile layout — the panel targets a desktop monitor
+- depending on an application's UI URL scheme for anything load-bearing —
+  `deep_link` is a convenience ([D14](07-decisions.md))
 
 ## Done criteria
 

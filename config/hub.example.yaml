@@ -197,6 +197,75 @@ domains:
         graph: 48
 
 
+  # ── Jobs ──────────────────────────────────────────────────────────────────
+  # xyOps. A worked example of deep_link: the metric and the click target are
+  # the same fact, so a stale link cannot disagree with the number.
+  #
+  # limit: 1 fetches a single row; the count comes from list.length in the
+  # response metadata. Asking for every row to count them is how one card
+  # transfers a page of job records every 30 seconds.
+  - id: jobs
+    title: Jobs
+    glyph: clock-play
+    interval_sec: 60
+    stale_after_sec: 300
+
+    cards:
+      - id: xyops-failed
+        title: failed today
+        glyph: alert-circle
+        kind: metric
+        source:
+          type: http
+          method: GET
+          url: https://ops.lan/api/app/search_jobs/v1
+          headers: ["X-API-Key: ${xyops_key}"]
+          query: "tags:_error date:>=today"
+          limit: 1
+          extract: ".list.length"
+        format: "{n}"
+        thresholds: { warn: 1, critical: 5 }
+        deep_link: "https://ops.lan/#Search?result=error&date=today"
+
+      - id: xyops-ok
+        title: ok today
+        glyph: check
+        kind: metric
+        source:
+          type: http
+          method: GET
+          url: https://ops.lan/api/app/search_jobs/v1
+          headers: ["X-API-Key: ${xyops_key}"]
+          query: "tags:_success date:>=today"
+          limit: 1
+          extract: ".list.length"
+        format: "{n}"
+        thresholds: { warn: 5000 }
+        graph: 48
+        deep_link: "https://ops.lan/#Search?result=success&date=today"
+
+      - id: xyops-backup
+        title: nightly backup
+        glyph: database-backup
+        kind: status
+        source:
+          type: http
+          method: GET
+          url: https://ops.lan/api/app/search_jobs/v1
+          headers: ["X-API-Key: ${xyops_key}"]
+          query: "event:ev3nt_backup date:>=today"
+          limit: 1
+          select: ["id", "code", "description"]
+          extract: ".rows[0].code // 1"
+        map:
+          0: ok
+          1: down
+          2: warn
+          3: warn
+          4: down
+        deep_link: "https://ops.lan/#Events?sub=view&id=ev3nt_backup"
+
+
   # ── Links ─────────────────────────────────────────────────────────────────
   - id: links
     title: Links

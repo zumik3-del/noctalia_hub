@@ -63,6 +63,38 @@ through.
 Messages must be actionable — not `invalid value`, but
 `unknown source type "htp" (expected: http, command, stream, rss, static)`.
 
+## A failed action is not a stale reading
+
+The rule above — keep the last good value, dim it, never zero it — is right for
+readings and wrong for actions. A card that says "restart plex" and shows `200 ok`
+from four minutes ago while the restart fails is lying, and it is lying about the
+one thing you acted on.
+
+A failed `control:` therefore surfaces immediately and independently of the card's
+value:
+
+```
+▸ plex        200      from 14:02        ⚠ restart failed: 503
+```
+
+The value keeps its own staleness rules. The action gets its own, separate line,
+and the row goes to `down` for the action's sake. This is a deliberate exception
+to the rule above, scoped to actions only.
+
+## A deep link that stopped resolving
+
+The worst failure mode in the panel, because it is silent. A `deep_link` points
+into another application's UI, and UI URL schemes are that application's private
+business. xyOps documents its REST API thoroughly and its `#Page?args` scheme not
+at all — the scheme was read out of its source.
+
+When one breaks, the target application shows an ordinary page rather than an
+error. Nothing in the panel can detect this, because from here the click worked.
+
+The only defence is not relying on it: a `deep_link` must never be the only way to
+reach a number the panel depends on. The card still shows the value; the link is
+a shortcut.
+
 ## A value that failed to parse is shown as-is
 
 Not replaced with zero, not hidden:

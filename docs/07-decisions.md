@@ -113,8 +113,8 @@ failure at the end of the list comes last rather than first.
 
 ## D9. The GUI editor is deferred
 
-**Decision.** The first version is a read-only panel. Editing happens through the
-file only.
+**Decision.** Editing `hub.yaml` happens through the file only. No drag-and-drop
+layout, no forms, no write-back.
 
 **Why.** The value is in the data and its status, not in CRUD. A panel editor
 (`dragSource`/`dropZone`, forms, writing back to YAML) is a large independent piece
@@ -122,6 +122,14 @@ of work, and the file covers the same need.
 
 **When.** Once the schema has settled. Otherwise it gets rebuilt for every schema
 change.
+
+**Scope note.** This decision is about editing *the config file*, and it is
+unaffected by the panel acting on the world — see [D12](#d12-the-panel-acts-but-only-by-delegating)
+for `run:` and [D15](#d15-controls-live-in-their-own-zone-and-are-a-later-version)
+for `control:`. The panel gained the ability to open a terminal and, later, to
+write to remote systems without ever touching `hub.yaml`. An earlier wording of
+this decision said "read-only panel", which stopped being true at D12 and is now
+deliberately not what this says.
 
 ---
 
@@ -206,6 +214,88 @@ nothing.
 **Consequence.** A console card holds a process open, so it needs a longer
 `stale_after_sec` than a polling card, and closing the panel must tear the stream
 down rather than leak readers.
+
+---
+
+## D14. The metric and its click target are one fact
+
+**Decision.** `deep_link:` builds a card's click target from the source's own
+`query` plus extracted fields. The plugin percent-encodes `{query}`.
+
+**Why.** A card that counts failures should link to those failures. Writing the
+criterion twice is how a config rots, and the two copies are rarely the same
+string — xyOps takes `tags:_error` on its API and `result=error` in its UI. That
+mapping is the target application's internal knowledge, and it changes without
+warning.
+
+**Rejected.**
+
+- *Hand-writing both.* Two strings, one fact, no enforcement. Silently wrong.
+- *A per-integration adapter.* xyOps would become a special case in the schema, and
+  the next system with the same shape would become another one. The mechanism is
+  generic; the knowledge stays in the user's config where they can see it.
+- *Leaving encoding to the user.* `tags:_error date:>=today` contains a space and
+  a `>`. Anyone who has to percent-encode a query stops writing queries.
+
+**Consequence.** Deep links point into other applications' UIs, which are their
+private business. xyOps documents its REST API thoroughly and its `#Page?args`
+scheme not at all — the scheme was read out of source. A `deep_link` that stops
+resolving shows an ordinary page rather than an error, so a stale one is invisible
+until you notice you landed somewhere unexpected. Treat `deep_link` as a
+convenience, never as the only path to a number.
+
+---
+
+## D15. Controls live in their own zone and are a later version
+
+**Decision.** A card may declare a `control:` block that writes to a remote system.
+Controls are grouped in a dedicated `Controls` zone, arm-confirm is mandatory for
+destructive ones, the write result becomes the card value, and every action is
+logged. Deferred until after hot reload and the card editor.
+
+**Why.** The instrument-panel metaphor was never only gauges, and the panel was
+going to be read-only, which turns out to be the wrong instinct: the natural click
+on a "Dynacat" card is not "open the URL" but "let me ssh in". Nothing about
+reading forbids acting.
+
+Not a conflict with D9. An action is not configuration editing; the panel still
+does not write to `hub.yaml`.
+
+**A separate zone, not buttons on indicator rows.** A real cockpit puts switches
+on a switch panel rather than beside every gauge, and there is a practical reason
+too: you do not mis-hit a switch because you were reading a number. Mixing them
+turns the panel into a form and puts a reboot button next to a memory readout.
+
+**Arm-confirm names the target**, not "are you sure". The panel is opened for a
+five-second glance, so a mis-click is a realistic threat model, not a theoretical
+one.
+
+**The write result is the new reading.** The same feedback loop as everything else
+in the panel: the response of the write becomes the card's value.
+
+**Rejected.**
+
+- *Confirmation via a host dialog.* There is none. `plugin_api` 32 has no
+  `confirm`, no modal — the only host-provided dialog is `openColorPicker`, which
+  exists because it is a built-in picker, not something a plugin composes. The
+  two-step has to be built inside the panel.
+- *Reusing `run:` for writes.* `run` runs a local shell command and is trusted
+  input verbatim. A remote write is a different risk class with different
+  confirmation and logging requirements. Pretending they are the same field is how
+  a reboot ends up one stray keystroke away.
+
+**Consequence.** Two things this decision breaks, on purpose:
+
+- **D7 does not apply to controls.** Values surviving failure is right for
+  readings, and wrong for actions. A failed write must not leave a card looking
+  nominal. This is a deliberate, narrow exception.
+- **"Read-only first" stops being true.** D9's editor deferral still stands, but
+  the framing does not survive, so it becomes an explicit per-version decision
+  rather than a quiet drift.
+
+Control lifecycle is a second state axis, orthogonal to `ok`/`warn`/`down`/`stale`:
+`idle → armed → in-flight → ok` / `failed`. An action log ring buffer goes in the
+footer, so "who restarted pve at 3am" has an answer.
 
 ---
 
