@@ -122,10 +122,28 @@ you check:
 | WebView / iframe / HTML | No embedding — not of a URL, not of another plugin's panel |
 | `openPanel`, panel registry query | `togglePanel` only inverts; the shell has the rest |
 | Cross-plugin data read | `state` is shared but has no discovery and no schema |
+| Service pointers (`WeatherService*` and friends) | Shell services are C++ objects; a plugin cannot hold one |
+| Per-widget colour overrides | `getColor(role)` gives theme roles, not the bar's per-widget layer |
+| Manual layout (`measure` + `setPosition`) | Plugin trees are laid out by the reconciler; geometry converges, not matches |
 
 All four absences are closed, not deferred. The first three are why the API table
 above is the whole surface; the last two are recorded in
-[D20](07-decisions.md).
+[D20](07-decisions.md). The last three are recorded in [D21](07-decisions.md).
+
+### The shell source is a reference, not a dependency
+
+`noctalia-dev/noctalia` is public and MIT-licensed. Two directories are worth
+knowing about, for opposite reasons:
+
+| Path | Use |
+|---|---|
+| `src/shell/bar/widgets/` | **Look reference.** `weather_widget.cpp` is 219 lines of declarative node-tree construction with no custom painting. Read it as a spec for layout and palette |
+| `src/system/`, `src/calendar/` | **Not portable.** Service objects and data fetches. A plugin cannot hold a `WeatherService*`, and does not need to — the data is public JSON |
+
+The shell's widgets and plugin widgets render through the same reconciler
+(`src/ui/ui_tree_reconciler.cpp`) and share `ui/builders.h`, `ui/palette.h` and
+`ui/style.h`. That shared vocabulary is why a port is cheap. See
+[D21](07-decisions.md).
 
 `runInTerminal` is guarded by a feature check, following `tailscale` in
 `community-plugins`:

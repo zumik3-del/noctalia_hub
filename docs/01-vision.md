@@ -85,6 +85,11 @@ title, the duration and the link. It cannot show the thumbnail or the summary
 formatting, and it never will without becoming an app. A card is a labelled
 reading, not a document.
 
+The boundary is about the **config**, not about code. Vendoring a renderer from
+the shell's own open-source widgets is allowed ([D21](07-decisions.md)) precisely
+because the config never describes it — the port is plugin code, frozen and
+versioned visibly. What is forbidden is the config carrying markup.
+
 ## Done criteria
 
 1. The panel opens on a hotkey and renders every zone from the config without errors.

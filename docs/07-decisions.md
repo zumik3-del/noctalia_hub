@@ -486,10 +486,11 @@ its README. Idempotence is the whole reason the CLI command exists.
 **Panels cannot be embedded, and this is not an effort question.** There is no
 WebView, no iframe and no HTML in `plugin_api` 32 — the panel is a declarative
 `ui.*` tree and a plugin's panel is its own surface. Noctalia's calendar and
-weather live inside the `location` bar widget and are reachable only as
-control-center sections; their data is held in memory, fetched from CalDAV or
-Google, with nothing in `state.toml` but discovery metadata. There is no file to
-read and no surface to mount.
+weather are reachable only as control-center sections; their data is held in
+memory, fetched from CalDAV or Google, with nothing in `state.toml` but discovery
+metadata. There is no file to read and no surface to mount. That data boundary is
+absolute. The *rendering* of those widgets is a different matter, and open source
+makes it portable — see [D21](#d21-the-look-is-portable-the-data-is-not).
 
 **There is no generic way to read another plugin's data.** `noctalia.state` is a
 shared key-value store — that is how a plugin's `service.luau` talks to its own
@@ -526,6 +527,86 @@ context is the config author's.
 
 ---
 
+## D21. The look is portable, the data is not
+
+**Decision.** A card may be rendered by code ported from the shell's own widget
+source. The port is frozen at a known version, attributed, and its version is shown
+in the panel. Vendored code may *present*; it may never *fetch*.
+
+**The shell is open source.** `noctalia-dev/noctalia`, MIT, active — commits the
+same day this was checked. An earlier note in this repo said the calendar and
+weather had "no source". That was wrong, or true only of the local machine.
+
+**Why the look is portable.** `src/shell/bar/widgets/weather_widget.cpp` is 219
+lines. Its entire rendering is:
+
+```cpp
+void WeatherWidget::create() {
+  auto area = ui::inputArea({});
+  area->addChild(ui::glyph({ .glyph = "weather-cloud",
+      .glyphSize = Style::baseGlyphSize * m_contentScale,
+      .color = widgetIconColorOr(colorSpecFromRole(ColorRole::OnSurface)) }));
+  area->addChild(ui::label({ .fontSize = Style::fontSizeBody * fontScale(),
+      .fontWeight = labelFontWeight(), .maxLines = 1 }));
+  setRoot(std::move(area));
+}
+```
+
+Twenty-five lines. No shader, no custom painting, no WebView. The shell's widgets
+and plugin widgets build the same kind of node tree through the same vocabulary —
+shared `ui/builders.h`, `ui/palette.h`, `ui/style.h`, and one reconciler in
+`src/ui/ui_tree_reconciler.cpp`. `ColorRole::OnSurface` is what
+`noctalia.getColor(role)` hands a plugin.
+
+The look is not secret rendering. It is a layout plus a palette. That is why
+copying it is cheap.
+
+**Three costs, measured rather than assumed.**
+
+1. *Layout is manual in C++, reconciled in Luau.* `doLayout` measures and positions
+   by hand: `measure(renderer)`, `setPosition(std::round(...))`, with a
+   vertical/horizontal branch. A plugin's tree is laid out by the reconciler. The
+   same geometry expressed through `ui.box` converges towards the shell's look; it
+   does not reproduce it exactly. For a cockpit panel that is arguably correct — a
+   widget that matches its own dashboard beats one that matches a widget somewhere
+   else.
+2. *The service pointer is unreachable.* `WeatherWidget` holds a `WeatherService*`,
+   Noctalia's own fetch. A plugin cannot obtain it and must not try. Weather data
+   is public JSON — one `http` source. The vendored code may present; it may not
+   fetch.
+3. *Per-widget colour overrides are missing.* `widgetIconColorOr()` and
+   `widgetForegroundOr()` read the bar's per-widget user overrides.
+   `noctalia.getColor(role)` gives the theme roles, not that layer. A card inherits
+   the palette and not "this particular bar widget was set to accent". Small, and
+   it is the difference between *beautiful* and *identical*.
+
+**No upstream link, deliberately.** Once ported the renderer is frozen.
+`lunar-calendar` vendors 36 kB of generated data from a pinned upstream with a
+regeneration script and a `DO NOT EDIT BY HAND` header; `jalali_calendar` bundles
+a font and ships its `LICENSE`. Same discipline. MIT permits it and the obligation
+is one thing: keep the notice.
+
+**Rejected.**
+
+- *Vendoring the C++.* A plugin is Luau. Porting is the only option; pretending
+  otherwise produces a build nobody can run.
+- *Reading `WeatherService` from a plugin.* Not exposed, not discoverable, and the
+  data is public anyway.
+- *Tracking upstream.* Explicitly declined. The cost is that shell design changes
+  do not propagate — which is the point.
+
+**Consequence.** A vendored renderer's version is **visible in the panel**. This is
+the first component whose appearance comes from outside the config, so the panel
+is no longer fully described by `hub.yaml`. Freezing the port makes that honest:
+the version in the footer is what the panel was drawn by, and a month later "the
+panel changed" and "the panel broke" stay distinguishable.
+
+It does not breach the no-markup boundary — Luau is not markup, and the config still
+describes only data. What the port adds is a component whose output the config
+author cannot read.
+
+---
+
 ## Open questions
 
 **Default interval.** 60s is reasonable for services, excessive for releases.
@@ -551,3 +632,12 @@ quoting this project keeps refusing.
 there is no return path, but a `notify:`-shaped use — wake a plugin, ask it to
 refresh — is not an action and might deserve a card field later. Needs a use case
 before it earns a field.
+
+**Where a vendored renderer lives.** D21 allows porting the shell's widget
+rendering, but `kind:` has meant "one of six, rendering only" since the beginning
+and every decision leans on that. A ported weather widget is a seventh rendering
+path whose output depends on code in the plugin rather than the config. Two
+candidates: extend `kind:` to include it, or keep `kind:` closed and let a zone
+declare a bespoke component. Leaning the second — `kind:` stays a closed set the
+config can enumerate, and a bespoke component is a zone-level declaration rather
+than a card. Needs a real widget before it is decided.
