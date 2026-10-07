@@ -16,11 +16,11 @@ Anchors are the deciding argument. With thirty identical LXC containers:
 ```yaml
 cards:
   - <<: *lxc
-    id: plex
-    title: Plex
+    id: pocketbase
+    title: Pocketbase
   - <<: *lxc
-    id: sonarr
-    title: Sonarr
+    id: jellyfin
+    title: Jellyfin
 ```
 
 The cost is a converter. That is handled by an existing mechanism: declare
@@ -84,17 +84,17 @@ domains:
   - id: infra
     title: Infrastructure
     glyph: server
-    refresh: 30             # overrides defaults for this zone
+    interval_sec: 30        # overrides defaults for this zone
 
     cards:
       - id: dynacat
         title: Dynacat
         glyph: cat
         kind: status
-        link: https://dynacat.lan
+        link: https://dynacat.home.lan
         source:
           type: http
-          url: https://dynacat.lan/health
+          url: https://dynacat.home.lan/health
           ok_when: "status == 200"
 
       - id: proxmox-nodes
@@ -103,7 +103,7 @@ domains:
         kind: metric
         source:
           type: http
-          url: https://pve.lan:8006/api2/json/cluster/resources
+          url: https://pve.home.lan:8006/api2/json/cluster/resources
           auth: { token: "${proxmox_token}" }
           extract: "length"
         format: "{n} nodes"
@@ -139,6 +139,19 @@ domains:
           failure: down
           cancelled: warn
         stale_after_sec: 900
+
+  - id: system
+    title: System
+    glyph: cpu
+    pin: bottom            # footer: background, outside the scrolling flow
+    cards:
+      - id: cpu
+        title: CPU
+        kind: metric
+        source: { type: command, cmd: "top -bn1 | awk '/Cpu\\(s\\)/ {print 100 - $8}'" }
+        format: "{n}%"
+        thresholds: { warn: 80, critical: 95 }
+        graph: 48
 ```
 
 ## Card fields
@@ -150,10 +163,13 @@ domains:
 | `id` | yes | Stable key; state and interval are tracked per id |
 | `title` | yes | Name shown in the instrument row |
 | `glyph` | no | Tabler glyph; falls back to a default per `kind` |
-| `kind` | yes | Rendering only: `status` \| `metric` \| `release` \| `link` \| `graph` \| `text` \| `console` \| `list` |
+| `kind` | yes | Rendering only: `status` \| `metric` \| `release` \| `link` \| `console` \| `list` |
 | `span` | no | `1` or `2` — how many cells the card occupies in the flow |
 | `description` | no | One line of prose; see below |
 | `hidden` | no | `true` keeps the card in the config without rendering it |
+
+The six kinds are a **closed set** ([D22](07-decisions.md)). `graph` is a
+presentation field on any card, not a kind; a plain string reading is `status`.
 
 #### description
 
@@ -166,19 +182,32 @@ and the zone grows taller than the screen, which is the failure this project is
 built to avoid. The description is for the moment you are already looking at one
 card, which is exactly when a selected card is.
 
-Always-on descriptions are a zone-level toggle the panel does not have. If a zone
-ever needs one, it is `show_descriptions` on the domain, not a layout change per
-card.
+Always-on descriptions are deliberately **not** supported. A `show_descriptions`
+flag on the domain was considered and rejected ([D18](07-decisions.md)): a zone that
+wants eighteen always-on lines has too many cards in it, and the fix is to split the
+zone, not to add a switch. The description stays a selection-time detail.
 
 ### Data
 
 | Field | Description |
 |---|---|
 | `source.type` | `http` \| `command` \| `stream` \| `rss` \| `static` |
+| `source.ok_when` | Predicate over the parsed response; false ⇒ `down` |
+| `source.extract` | jq expression collapsing the payload into a value (or many) |
+| `source.parse` | `json` \| `stdout` \| `stderr` — how command output is read |
+| `map` | Extracted value ⇒ state, e.g. `{ 0: ok, 1: down }` |
 | `interval_sec` | Poll period; inherited from `defaults` |
 | `timeout_ms` | Timeout; defaults to 8000 |
 | `stale_after_sec` | Age at which the card dims |
 | `retries` | Retry count on failure |
+
+`ok_when` and `map` answer different questions, and both are needed. `ok_when` is a
+predicate over the **parsed response**, evaluated at fetch time — its bare
+identifiers are the response's top-level fields, so `ok_when: "status == 'running'"`
+matches a body of `{"status": "running"}`. `map` runs later, on the **extracted
+value**, and translates it into a state (`0: ok`, `1: down`). A card asking "did the
+response say the right thing" uses `ok_when`; a card asking "what does this number
+mean" uses `map`.
 
 ### Presentation
 
@@ -237,11 +266,12 @@ opens a panel and nothing else — the command returns immediately, prints nothi
 anyone reads, and a terminal window flashing open to display `ok` is a bug, not
 delegation.
 
-**Use `panel-open`, never `togglePanel`.** The API offers `noctalia.togglePanel`,
-which inverts: press it twice and the panel closes. Every plugin that opens
-panels programmatically switched to `panel-open` for this reason, and `cider`
-documents the swap outright. `panel-open` is idempotent — it brings a panel
-forward instead of inverting it.
+**For another panel, use `panel-open`, not `togglePanel`.** The Lua API offers
+`noctalia.togglePanel`, which inverts: press it twice and the panel closes. That is
+correct for a bar widget toggling its *own* panel, and wrong for a card opening
+someone else's — a card pressed twice should bring the panel forward, not dismiss
+it. Every community plugin that opens another plugin's panel switched to
+`panel-open` for this reason, and `cider` documents the swap outright.
 
 Panels come in two spellings:
 
@@ -292,9 +322,10 @@ source:
 
 **This one does not work yet, and the reason is a real schema gap.** The registry
 arrives as a single line — `error: unknown panel "..." (available: a, b, c)` — and
-`kind: list` can take one field per row but has no way to split a row into fields
-or to strip a prefix. Turning that line into a list of panel ids needs three
-operations the schema does not have. It is left in the open questions rather than
+turning it into a list of ids needs three transformations: strip the prefix, strip
+the trailing `)`, split on `, `. `split:` now exists ([D23](07-decisions.md)), which
+is the last of the three; the two strips remain, and a prefix/suffix strip for a
+single card is still the wrong trade. It is left as a documented gap rather than
 papered over with a `sed`, because a card that works only until the shell rewords
 its error message is worse than no card.
 
@@ -305,13 +336,13 @@ single meaning, "how to draw the reading", exactly as [D4](07-decisions.md)
 established. What the card *does* is an orthogonal axis, like `thresholds`:
 
 ```yaml
-- id: plex
-  title: Plex
+- id: pocketbase
+  title: Pocketbase
   glyph: server
   kind: status                    # unchanged — this is still a status reading
   source:
     type: http
-    url: https://pve.lan:8006/api2/json/nodes/pve/status/104/status
+    url: https://pve.home.lan:8006/api2/json/nodes/pve/lxc/104/status/current
     auth: { token: "${proxmox_token}" }
     extract: ".status"
   map:
@@ -319,12 +350,12 @@ established. What the card *does* is an orthogonal axis, like `thresholds`:
     stopped: warn
   control:
     type: http
-    url: https://pve.lan:8006/api2/json/nodes/pve/status/104/status/reboot
+    url: https://pve.home.lan:8006/api2/json/nodes/pve/lxc/104/status/reboot
     method: POST
     auth: { token: "${proxmox_token}" }
     expect: '"code == 0"'
   confirm:
-    target: "plex @ pve.lan"
+    target: "pocketbase @ pve.home.lan"
     effect: "LXC restart"
 ```
 
@@ -332,8 +363,8 @@ The row renders exactly as it would without `control:` — glyph, title, value, 
 age. Only what Enter does changes. The renderer gains no new branch.
 
 This is what keeps the control honest: the card shows the state of the thing you
-are about to change. A button labelled "restart plex" on its own does not tell you
-whether plex is currently running, which is exactly the information you need before
+are about to change. A button labelled "restart pocketbase" on its own does not tell you
+whether pocketbase is currently running, which is exactly the information you need before
 pressing it.
 
 `confirm` is required whenever `control` is present. `control` and `run` are not
@@ -353,7 +384,7 @@ the query twice is how a config rots:
 ```yaml
 # two strings that must stay in sync, expressing one fact
 query: "tags:_error date:>=today"                    # for the count
-link: "https://ops.lan/#Search?result=error&date=today"   # for the click
+link: "https://ops.home.lan/#Search?result=error&date=today"   # for the click
 ```
 
 Worse, the two vocabularies are rarely the same strings. xyOps, for example,
@@ -369,13 +400,13 @@ is xyOps-internal knowledge and quietly wrong the moment xyOps changes.
   kind: metric
   source:
     type: http
-    url: https://ops.lan/api/app/search_jobs/v1
+    url: https://ops.home.lan/api/app/search_jobs/v1
     headers: ["X-API-Key: ${xyops_key}"]
     query: "tags:_error date:>=today"
     limit: 1
     extract: ".list.length"
   thresholds: { warn: 1, critical: 5 }
-  deep_link: "https://ops.lan/#Search?result=error&date=today"
+  deep_link: "https://ops.home.lan/#Search?result=error&date=today"
 ```
 
 Placeholders available inside `deep_link`:
@@ -406,13 +437,13 @@ The full round trip, because it is the shape most real cards want:
   source:
     type: http
     method: GET
-    url: https://ops.lan/api/app/search_jobs/v1
+    url: https://ops.home.lan/api/app/search_jobs/v1
     headers: ["X-API-Key: ${xyops_key}"]
     query: "tags:_error date:>=today"
     limit: 1                      # fetch one row, read the count from list.length
     extract: ".list.length"
   thresholds: { warn: 1, critical: 5 }
-  deep_link: "https://ops.lan/#Search?result=error&date=today"
+  deep_link: "https://ops.home.lan/#Search?result=error&date=today"
 ```
 
 `limit: 1` with the count read from the response metadata is the difference
@@ -430,10 +461,10 @@ landed somewhere unexpected.
 
 ```yaml
 - id: pve-ssh
-  title: pve.lan
+  title: pve.home.lan
   glyph: ssh
   kind: status
-  run: "ssh root@pve.lan"
+  run: "ssh root@pve.home.lan"
   source:
     type: command
     argv: ["systemctl", "is-active", "pveproxy"]
@@ -450,7 +481,7 @@ landed somewhere unexpected.
 ### run — what it actually does
 
 ```lua
-noctalia.runInTerminal("ssh root@pve.lan")
+noctalia.runInTerminal("ssh root@pve.home.lan")
 ```
 
 This opens a **separate terminal window**, it does not embed one. The panel stays
@@ -461,7 +492,7 @@ config is written by the user in their own home directory, so it is trusted inpu
 and needs no quoting. Chaining and redirection work:
 
 ```yaml
-run: "ssh root@pve.lan 'journalctl -u pveproxy -f -n 20'"
+run: "ssh root@pve.home.lan 'journalctl -u pveproxy -f -n 20'"
 ```
 
 `run` **does not interpolate source values.** No `{host}`, no `${secret}`. A value
@@ -528,7 +559,7 @@ A reading with more than one value in it — a top-N, a set of names, a roster.
   max_items: 8
   source:
     type: command
-    argv: ["ssh", "pve.lan", "pct exec 101 -- sqlite3 /etc/pihole/pihole-FTL.db 'SELECT domain FROM queries GROUP BY domain ORDER BY COUNT(*) DESC LIMIT 8'"]
+    argv: ["ssh", "pve.home.lan", "pct exec 100 -- sqlite3 /etc/pihole/pihole-FTL.db 'SELECT domain FROM queries GROUP BY domain ORDER BY COUNT(*) DESC LIMIT 8'"]
     extract_lines: domain          # field per row
 ```
 
@@ -542,11 +573,19 @@ The pipeline is unchanged — `fetch → extract → map → format`. What chang
 | `row_format` | Per-row template, e.g. `"{feed}  {title}"` |
 | `description` | Second line, shown when the card is selected |
 | `source.extract_lines` | Field name or index to take from each row |
+| `source.split` | Delimiter splitting a text row into indexed fields; `whitespace` collapses runs |
 | `source.parse` | `json` when the command emits JSON, so `extract` can index it |
 
 A row is a mapping, whatever produced it: JSON keys from a `command` source,
 `title` / `link` / `pubDate` / `feed` from `rss`, one field from `command` text.
 `row_format` templates the row the same way `format` templates a single value.
+
+When the tool emits fixed text columns rather than JSON, `split:` turns each line
+into an indexed row — `{0}`, `{1}`, … in `row_format`, or one index via
+`extract_lines`. `split: whitespace` collapses runs of spaces, which is what
+column-oriented output such as `df -P` needs. This is the alternative to an `awk`
+or `sed` pipeline inside a shell string, which is the quoting the schema refuses
+everywhere else ([D23](07-decisions.md)).
 
 A list card is collapsed to a count by default and expands on Enter. That is the
 only card that changes shape when selected, and the reason is capacity: the top 8
@@ -575,8 +614,9 @@ count; when expanded it shows the rows.
 | `id` | Stable key |
 | `title` | Header text |
 | `glyph` | Header glyph |
-| `refresh` | Overrides `defaults.interval_sec` for this zone |
+| `interval_sec` | Overrides `defaults.interval_sec` for this zone |
 | `stale_after_sec` | Overrides the default for this zone |
+| `pin` | `bottom` fixes the zone to the panel footer, outside the scrolling flow; at most one zone may pin |
 | `cards` | Ordered list; order is the visual order, there is no `row`/`column` |
 
 ## Source types
@@ -683,7 +723,7 @@ already exist, and `argv` keeps the quoting honest:
 ```yaml
 source:
   type: command
-  argv: ["ssh", "pve.lan", "pct exec 101 -- pihole -q --list"]
+  argv: ["ssh", "pve.home.lan", "pct exec 100 -- pihole -q --list"]
 ```
 
 Everything after the host is **one argv element**, so the remote command is passed
@@ -696,7 +736,7 @@ prefer `argv` over `cmd` for anything that crosses a hop — see
 PATH may be minimal. Absolute paths, or a leading `PATH=`, matter here:
 
 ```yaml
-argv: ["ssh", "pve.lan", "pct exec 101 -- /usr/bin/sqlite3 /etc/pihole/pihole-FTL.db 'SELECT ...'"]
+argv: ["ssh", "pve.home.lan", "pct exec 100 -- /usr/bin/sqlite3 /etc/pihole/pihole-FTL.db 'SELECT ...'"]
 ```
 
 Two traps specific to this hop:
@@ -784,7 +824,7 @@ x-templates:
     kind: status
     source:
       type: http
-      url: https://pve.lan:8006/api2/json/nodes/pve/status
+      url: https://pve.home.lan:8006/api2/json/nodes/pve/status
       auth: { token: "${proxmox_token}" }
       ok_when: "status == 'running'"
 
@@ -793,11 +833,11 @@ domains:
     title: Infrastructure
     cards:
       - <<: *lxc
-        id: plex
-        title: Plex
+        id: pocketbase
+        title: Pocketbase
       - <<: *lxc
-        id: sonarr
-        title: Sonarr
+        id: jellyfin
+        title: Jellyfin
 ```
 
 Two constraints:

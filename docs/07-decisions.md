@@ -84,6 +84,12 @@ empty column three screens tall reads as a bug.
 **Rejected.** A rigid grid — tidy with uniform data, broken with real data. Layout
 B (rail plus focus) requires navigation, which is worse for a five-second glance.
 
+**One exception: the footer.** A zone may declare `pin: bottom`, which takes it out
+of the flow and fixes it to the panel footer. The system readout and the action log
+live there: they are background, always visible, and must not push content around as
+their numbers change. At most one zone may pin, so the footer stays a fixed strip
+rather than a second column of zones.
+
 ---
 
 ## D7. Values survive source failure
@@ -281,7 +287,7 @@ in the panel: the response of the write becomes the card's value.
   avoided when it made `kind` affect rendering only. Every future kind would then
   have to be sorted into one bucket or the other. It also costs a new rendering
   mode for no gain, and it loses the thing that makes a control honest: a button
-  labelled "restart plex" does not tell you whether plex is running right now,
+  labelled "restart pocketbase" does not tell you whether pocketbase is running right now,
   which is exactly what you need to know before pressing it. The separation the
   separate kind was meant to provide is already provided by the `Controls` zone.
 - *`control` and `run` as one field.* Both "run a command", but `run` executes a
@@ -307,8 +313,8 @@ Control lifecycle is a second state axis, orthogonal to `ok`/`warn`/`down`/`stal
 footer, so "who restarted pve at 3am" has an answer.
 
 **`control` joins the action mutual-exclusion set.** A card carries at most one of
-`link`, `link_template`, `deep_link`, `run`, `control`. This is what stops a card
-from being both a navigation target and a write target.
+`link`, `link_template`, `deep_link`, `panel`, `run`, `control`. This is what stops
+a card from being both a navigation target and a write target.
 
 ---
 
@@ -373,7 +379,7 @@ and a nested command — is a wrapper the plugin would have to keep in step with
 host is a **single string argument**:
 
 ```yaml
-argv: ["ssh", "pve.lan", "pct exec 101 -- pihole -q --list"]
+argv: ["ssh", "pve.home.lan", "pct exec 100 -- pihole -q --list"]
 ```
 
 `ssh` forwards that one argument to the remote shell verbatim, which parses it once.
@@ -431,9 +437,10 @@ place the moment you focus one card, which is exactly what selection means.
 - *Folding it into `title`.* `Proxmox — Web interface for Proxmox VE` is a title
   nobody can scan, because the part you scan by is buried mid-string.
 
-**Consequence.** A zone that genuinely wants them always visible needs a
-domain-level `show_descriptions`, which does not exist yet. When it does, it is
-one flag on the zone rather than a per-card decision.
+**Consequence.** A zone that wants descriptions always visible has no switch for it,
+and that is deliberate: a domain-level `show_descriptions` was considered and
+rejected (see the resolved questions below). A zone that feels it needs one has too
+many cards in it; the fix is to split the zone, not to add a toggle.
 
 ---
 
@@ -607,37 +614,99 @@ author cannot read.
 
 ---
 
-## Open questions
+## D22. The kind set is closed at six
 
-**Default interval.** 60s is reasonable for services, excessive for releases.
-Should `kind: release` ignore `interval_sec` and poll every 15 minutes instead?
-Leaning yes: releases get their own timer.
+**Decision.** `kind` is exactly `status`, `metric`, `release`, `link`, `console`,
+`list`. `graph` is a presentation field on any card, not a kind. A plain text
+reading is `status`.
 
-**Behaviour at high card counts.** Beyond roughly 80 cards a render budget and
-possibly virtualisation will be needed. The actual limit is unknown.
+**Why.** An earlier draft listed eight kinds, adding `graph` and `text`. `graph`
+was already a field (`graph: true` / a point count / `false`) and appeared as both,
+which is the duplication D4 exists to prevent: a card that draws a sparkline is a
+`metric` with `graph:` set, not a different kind of thing. `text` had no rendering
+of its own — a static string, a URL and an IP all render as a labelled value, which
+is `status`. Six is the number of genuinely distinct drawings.
 
-**Desktop widget.** A separate `desktop_widget.luau` showing the same summary as the
-bar indicator. Useful only if the bar widget is not enough — an open question.
+**Why a closed set matters.** Every later decision leans on `kind` meaning one
+thing. D15 kept `control` a flag rather than a kind for exactly this reason; D16
+argued `list` *is* a kind because it changes the drawing. A closed set of six makes
+"does this need a new kind?" answerable: only if it draws differently.
 
-**Splitting a text row into fields.** `kind: list` takes one field per row, so
-`sqlite3 -separator '|'` works. It cannot split a row that arrived as a single
-line of comma-separated text, nor strip a prefix — which is exactly what the
-discoverable panel registry needs (`03-config.md`, D20). A `split:` field would
-close it. Leaning yes, because the same gap blocks any list built from text rather
-than from JSON, and the current answer is a `sed` in a shell string, which is the
-quoting this project keeps refusing.
+**Rejected.** Keeping eight and documenting `graph` twice. Folding `console` or
+`list` into flags — they change the drawing, which is what a kind is.
 
-**Sending an event to another plugin.** `noctalia msg plugin <entry> <target>
-<event> [payload]` works and is one-way. D20 rejected it as a card action because
-there is no return path, but a `notify:`-shaped use — wake a plugin, ask it to
-refresh — is not an action and might deserve a card field later. Needs a use case
-before it earns a field.
+---
 
-**Where a vendored renderer lives.** D21 allows porting the shell's widget
-rendering, but `kind:` has meant "one of six, rendering only" since the beginning
-and every decision leans on that. A ported weather widget is a seventh rendering
-path whose output depends on code in the plugin rather than the config. Two
-candidates: extend `kind:` to include it, or keep `kind:` closed and let a zone
-declare a bespoke component. Leaning the second — `kind:` stays a closed set the
-config can enumerate, and a bespoke component is a zone-level declaration rather
-than a card. Needs a real widget before it is decided.
+## D23. `split:` turns a text line into fields
+
+**Decision.** A `list` card's source may declare `split: <delimiter>`, which splits
+each text row into indexed fields before `row_format` / `extract_lines` run.
+`whitespace` is a reserved delimiter that collapses runs. Fields are indexed from
+`0`.
+
+**Why.** `kind: list` could take one field per row from JSON, but a tool that emits
+fixed text columns — `df -P`, `pct list`, most `-o` output — could not be read at
+all. The only way there was `awk` or `sed` inside a shell string, which is the
+quoting this project refuses everywhere else (D12, D17). `split:` closes that
+without a shell.
+
+**Why `whitespace` is a value and not a second field.** Whitespace-separated columns
+are the common case, and splitting on a single space leaves empty fields wherever
+columns are aligned. One reserved word covers it; a `collapse:` flag whose only
+legal value is `true` is a field that should not exist.
+
+**Rejected.** A regex split — a second language in the schema for a case that has
+not appeared. Doing it inside `extract` — `extract` is jq and runs on JSON; a text
+row has not been parsed yet, so there is nothing for jq to index.
+
+**Consequence.** The panel registry (`03-config.md`, D20) still cannot be a card.
+Its line needs three transformations — strip the prefix, strip the trailing `)`,
+split on `, ` — and `split:` provides only the last. A prefix/suffix strip for one
+card is the wrong trade, so the gap is two operations wide instead of three, and it
+is recorded rather than worked around with `sed`.
+
+---
+
+## Resolved questions
+
+Earlier revisions carried these as open. Each is decided here; the reasoning is kept
+because the reasoning is the useful part.
+
+**Release polling is explicit, never per-kind.** `kind: release` does not get its
+own timer. A kind affects rendering only (D4), and a per-kind interval would put a
+polling rule inside a rendering concept — the exact collapse D4 refuses. The example
+sets `interval_sec: 900` on the Releases domain, which is the mechanism: one
+explicit knob at the domain, visible in the config.
+
+**No card cap; virtualisation waits for a measurement.** Zones already flow and the
+panel already scrolls as a whole (D6), so card count is a performance question, not
+a layout one. v1 renders every card. A config above roughly 100 cards gets a
+load-time *warning* — not an error — suggesting more zones, and virtualisation lands
+only if a measured render budget says it must. No number is enforced before there is
+a measurement to justify it.
+
+**No desktop widget.** The bar summary plus a hotkey is the entry point; a desktop
+surface would duplicate the summary and add a second render path to keep in step.
+`desktop_widget.luau` is dropped from the layer list. If the bar widget proves
+insufficient this reopens, with a reason rather than by default.
+
+**No `show_descriptions`.** Descriptions stay selection-only (D18). A zone flag that
+turns eighteen descriptions back on is the height blowup D18 exists to prevent. A
+zone that feels it needs one has too many cards in it, and the fix is to split the
+zone, not to add a switch.
+
+**`split:` is added for text rows.** See D23. The panel-registry card still stays
+out — it needs a prefix and a suffix strip as well as a split, and two more
+transformations to support one card is the wrong trade. The general text/CSV case is
+closed.
+
+**No events to other plugins.** `noctalia msg plugin ...` stays unexposed. There is
+no use case that is not better served by the panel reading the same data directly,
+and a one-way send with no return path is the "rejected write" failure mode D15
+refused for controls, without the confirmation that makes a control survivable.
+
+**A vendored renderer is a zone-level component, not a kind.** `kind:` stays closed
+at six (D22). A ported widget draws a *zone*, declared on the domain, and its
+version shows in the panel (D21). It never becomes a seventh card kind, because that
+would make `kind` mean "which code draws this" as well as "how the reading is
+drawn" — and those are only the same thing by accident.

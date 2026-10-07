@@ -75,8 +75,9 @@ documentation.
 
 ## Footer
 
-System metrics (CPU / MEM / DISK / NET) compact, with inline sparklines. A separate
-`system` domain, but always pinned to the bottom — it is background, not content.
+System metrics (CPU / MEM / DISK) compact, with inline sparklines. A separate
+`system` domain, declared with `pin: bottom`, so it sits outside the scrolling flow
+— it is background, not content.
 
 ## Keyboard
 

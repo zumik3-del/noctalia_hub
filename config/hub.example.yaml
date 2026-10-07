@@ -27,7 +27,7 @@ domains:
   - id: infra
     title: Infrastructure
     glyph: server
-    refresh: 30
+    interval_sec: 30
 
     cards:
       - id: dynacat
@@ -35,10 +35,10 @@ domains:
         glyph: cat
         kind: status
         description: Dashboard, feeds and release watching
-        link: https://dynacat.lan
+        link: https://dynacat.home.lan
         source:
           type: http
-          url: https://dynacat.lan/health
+          url: https://dynacat.home.lan/health
           ok_when: "status == 200"
 
       - id: proxmox-nodes
@@ -48,9 +48,11 @@ domains:
         span: 2
         source:
           type: http
-          url: https://pve.lan:8006/api2/json/cluster/resources
+          url: https://pve.home.lan:8006/api2/json/cluster/resources
           auth: { token: "${proxmox_token}" }
-          extract: ".data | length"
+          # /cluster/resources returns nodes AND guests. The label says nodes, so
+          # count nodes — a bare `length` counts every VM and LXC too.
+          extract: ".data | map(select(.type == \"node\")) | length"
         format: "{n} nodes"
         thresholds: { warn: 6, critical: 8 }
         graph: true
@@ -61,30 +63,33 @@ domains:
         kind: metric
         source:
           type: http
-          url: https://pve.lan:8006/api2/json/cluster/resources
+          url: https://pve.home.lan:8006/api2/json/cluster/resources
           auth: { token: "${proxmox_token}" }
           extract: ".data | map(select(.type == \"node\")) | map(.mem) | add // 0"
         format: "{n} MB"
         thresholds: { warn: 24000, critical: 30000 }
         graph: 96
 
-      - id: plex
-        title: Plex
-        glyph: brand-plex
+      # An LXC's own status endpoint, not the node's. /nodes/pve/status reports
+      # the node and has no `status` field to test, so `ok_when` would never match.
+      # /nodes/pve/lxc/<vmid>/status/current returns {"status": "running"}.
+      - id: pocketbase
+        title: Pocketbase
+        glyph: database
         kind: status
         source:
           type: http
-          url: https://pve.lan:8006/api2/json/nodes/pve/status
+          url: https://pve.home.lan:8006/api2/json/nodes/pve/lxc/104/status/current
           auth: { token: "${proxmox_token}" }
           ok_when: "status == 'running'"
 
-      - id: sonarr
-        title: Sonarr
-        glyph: download
+      - id: jellyfin
+        title: Jellyfin
+        glyph: movie
         kind: status
         source:
           type: http
-          url: https://pve.lan:8006/api2/json/nodes/pve/status
+          url: https://pve.home.lan:8006/api2/json/nodes/pve/lxc/107/status/current
           auth: { token: "${proxmox_token}" }
           ok_when: "status == 'running'"
 
@@ -92,19 +97,19 @@ domains:
         title: Proxmox
         glyph: external-link
         kind: link
-        link: https://pve.lan:8006
+        link: https://pve.home.lan:8006
         source: { type: static, value: "—" }
 
       # run: opens a terminal window — it does not embed one. The string is
       # passed to the shell verbatim and never interpolates source values.
       - id: pve-ssh
-        title: pve.lan
+        title: pve.home.lan
         glyph: ssh
         kind: status
-        run: "ssh root@pve.lan"
+        run: "ssh root@pve.home.lan"
         source:
           type: command
-          argv: ["ping", "-c", "1", "-W", "2", "pve.lan"]
+          argv: ["ping", "-c", "1", "-W", "2", "pve.home.lan"]
 
       # kind: console is a read-only tail. No input, no PTY — see D13.
       - id: pve-journal
@@ -117,6 +122,22 @@ domains:
           cmd: "journalctl -u pveproxy -f -o cat -n 20"
           pick: last
           lines: 12
+
+      # kind: list built from text, not JSON. df -P emits fixed columns, so
+      # `split: whitespace` turns each line into indexed fields and `row_format`
+      # reads them. Without `split` this would be an awk pipeline in a shell
+      # string — the quoting the schema refuses everywhere else. See D23.
+      - id: mounts
+        title: mounts
+        glyph: device-desktop
+        kind: list
+        max_items: 8
+        format: "{n} mounts"
+        row_format: "{5}  {4}"
+        source:
+          type: command
+          cmd: "df -P -x tmpfs -x devtmpfs -x squashfs | tail -n +2"
+          split: whitespace
 
 
   # ── Releases ──────────────────────────────────────────────────────────────
@@ -235,17 +256,6 @@ domains:
         thresholds: { warn: 3, critical: 10 }
         link: https://github.com/zumik3-del/noctalia_hub/pulls
 
-      - id: disk-home
-        title: Disk /
-        glyph: hard-drive
-        kind: metric
-        source:
-          type: command
-          cmd: "df -P /home | tail -1 | awk '{print 100 - $5}'"
-        format: "{n}%"
-        thresholds: { warn: 85, critical: 93 }
-        graph: 48
-
 
   # ── Jobs ──────────────────────────────────────────────────────────────────
   # xyOps. A worked example of deep_link: the metric and the click target are
@@ -268,14 +278,14 @@ domains:
         source:
           type: http
           method: GET
-          url: https://ops.lan/api/app/search_jobs/v1
+          url: https://ops.home.lan/api/app/search_jobs/v1
           headers: ["X-API-Key: ${xyops_key}"]
           query: "tags:_error date:>=today"
           limit: 1
           extract: ".list.length"
         format: "{n}"
         thresholds: { warn: 1, critical: 5 }
-        deep_link: "https://ops.lan/#Search?result=error&date=today"
+        deep_link: "https://ops.home.lan/#Search?result=error&date=today"
 
       - id: xyops-ok
         title: ok today
@@ -284,7 +294,7 @@ domains:
         source:
           type: http
           method: GET
-          url: https://ops.lan/api/app/search_jobs/v1
+          url: https://ops.home.lan/api/app/search_jobs/v1
           headers: ["X-API-Key: ${xyops_key}"]
           query: "tags:_success date:>=today"
           limit: 1
@@ -292,7 +302,7 @@ domains:
         format: "{n}"
         thresholds: { warn: 5000 }
         graph: 48
-        deep_link: "https://ops.lan/#Search?result=success&date=today"
+        deep_link: "https://ops.home.lan/#Search?result=success&date=today"
 
       - id: xyops-backup
         title: nightly backup
@@ -301,7 +311,7 @@ domains:
         source:
           type: http
           method: GET
-          url: https://ops.lan/api/app/search_jobs/v1
+          url: https://ops.home.lan/api/app/search_jobs/v1
           headers: ["X-API-Key: ${xyops_key}"]
           query: "event:ev3nt_backup date:>=today"
           limit: 1
@@ -313,7 +323,7 @@ domains:
           2: warn
           3: warn
           4: down
-        deep_link: "https://ops.lan/#Events?sub=view&id=ev3nt_backup"
+        deep_link: "https://ops.home.lan/#Events?sub=view&id=ev3nt_backup"
 
 
   # ── Network ───────────────────────────────────────────────────────────────
@@ -342,8 +352,8 @@ domains:
         kind: metric
         source:
           type: command
-          argv: ["ssh", "pve.lan",
-                 "pct exec 101 -- sqlite3 /etc/pihole/pihole-FTL.db 'SELECT COUNT(DISTINCT domain) FROM gravity'"]
+          argv: ["ssh", "pve.home.lan",
+                 "pct exec 100 -- sqlite3 /etc/pihole/pihole-FTL.db 'SELECT COUNT(DISTINCT domain) FROM gravity'"]
         format: "{n} domains"
         thresholds: { warn: 200000, critical: 400000 }
         graph: 96
@@ -359,8 +369,8 @@ domains:
         kind: metric
         source:
           type: command
-          argv: ["ssh", "pve.lan",
-                 "pct exec 101 -- sqlite3 /etc/pihole/pihole-FTL.db \"SELECT COUNT(*) FROM queries WHERE timestamp > strftime('%s','now','-1 day') AND status NOT IN (0,2,3,12,13,14,17)\""]
+          argv: ["ssh", "pve.home.lan",
+                 "pct exec 100 -- sqlite3 /etc/pihole/pihole-FTL.db \"SELECT COUNT(*) FROM queries WHERE timestamp > strftime('%s','now','-1 day') AND status NOT IN (0,2,3,12,13,14,17)\""]
         format: "{n}"
         thresholds: { warn: 5000, critical: 20000 }
         graph: 96
@@ -378,8 +388,8 @@ domains:
         format: "{n} seen"
         source:
           type: command
-          argv: ["ssh", "pve.lan",
-                 "pct exec 101 -- sqlite3 -json /etc/pihole/pihole-FTL.db \"SELECT domain, COUNT(*) AS n FROM queries WHERE timestamp > strftime('%s','now','-1 day') AND status NOT IN (0,2,3,12,13,14,17) GROUP BY domain ORDER BY n DESC LIMIT 8\""]
+          argv: ["ssh", "pve.home.lan",
+                 "pct exec 100 -- sqlite3 -json /etc/pihole/pihole-FTL.db \"SELECT domain, COUNT(*) AS n FROM queries WHERE timestamp > strftime('%s','now','-1 day') AND status NOT IN (0,2,3,12,13,14,17) GROUP BY domain ORDER BY n DESC LIMIT 8\""]
           parse: json
           extract: ".[*]"
 
@@ -396,8 +406,8 @@ domains:
         description: Hostnames caddy adapts from its Caddyfile
         source:
           type: command
-          argv: ["ssh", "pve.lan",
-                 "pct exec 102 -- caddy adapt --config /etc/caddy/Caddyfile --adapter caddyfile"]
+          argv: ["ssh", "pve.home.lan",
+                 "pct exec 121 -- caddy adapt --config /etc/caddy/Caddyfile --adapter caddyfile"]
           parse: json
           # `..` walks every level and `.host?` ignores the non-matching ones, so
           # this survives Caddy renaming srv0 and survives a change in nesting
@@ -419,8 +429,8 @@ domains:
         span: 2
         source:
           type: command
-          argv: ["ssh", "pve.lan",
-                 "pct exec 102 -- caddy adapt --config /etc/caddy/Caddyfile --adapter caddyfile"]
+          argv: ["ssh", "pve.home.lan",
+                 "pct exec 121 -- caddy adapt --config /etc/caddy/Caddyfile --adapter caddyfile"]
           parse: json
           extract: "[(.. | .host? // empty)] | flatten | length"
         format: "{n} hostnames"
@@ -481,7 +491,8 @@ domains:
       # arrives as one line of comma-separated text with a prefix, and `kind:
       # list` has no way to split a row into fields. Shipping it would mean
       # three undocumented transformations and a card that breaks silently when
-      # the shell rewords its error. See docs/03-config.md and the open questions.
+      # the shell rewords its error. See docs/03-config.md and the resolved
+      # questions in docs/07-decisions.md.
 
 
   # ── Links ─────────────────────────────────────────────────────────────────
@@ -510,3 +521,49 @@ domains:
         kind: link
         link: https://ha.home.lan
         source: { type: static, value: "—" }
+
+
+  # ── System ────────────────────────────────────────────────────────────────
+  # Pinned to the footer: background, not content. `pin: bottom` takes the zone
+  # out of the scrolling flow, so it is always visible without being in the way.
+  # At most one zone may pin. See docs/02-layout.md.
+  - id: system
+    title: System
+    glyph: cpu
+    pin: bottom
+    interval_sec: 15
+    stale_after_sec: 60
+
+    cards:
+      - id: cpu
+        title: CPU
+        glyph: cpu
+        kind: metric
+        source:
+          type: command
+          cmd: "top -bn1 | awk '/Cpu\\(s\\)/ {print 100 - $8}'"
+        format: "{n}%"
+        thresholds: { warn: 80, critical: 95 }
+        graph: 48
+
+      - id: mem
+        title: MEM
+        glyph: server-2
+        kind: metric
+        source:
+          type: command
+          cmd: "free | awk '/Mem:/ {printf \"%.0f\", $3/$2*100}'"
+        format: "{n}%"
+        thresholds: { warn: 85, critical: 95 }
+        graph: 48
+
+      - id: disk-home
+        title: Disk /
+        glyph: hard-drive
+        kind: metric
+        source:
+          type: command
+          cmd: "df -P /home | tail -1 | awk '{print 100 - $5}'"
+        format: "{n}%"
+        thresholds: { warn: 85, critical: 93 }
+        graph: 48

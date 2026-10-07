@@ -8,7 +8,6 @@ plugin/
 ├── service.luau         # background: collect data → noctalia.state
 ├── panel.luau           # full-screen panel, pure subscriber
 ├── widget.luau          # compact bar summary
-├── desktop_widget.luau  # optional desktop surface
 ├── config.luau          # load and validate hub.yaml
 ├── pipeline.luau        # fetch → extract → map → format
 ├── sources/             # source type implementations
@@ -90,7 +89,7 @@ end
 | `noctalia.pluginDataDir()` | Converted-JSON cache, history |
 | `noctalia.tr(key, subst)` | i18n |
 | `noctalia.notify` / `noctalia.notifyError` | Alerts |
-| `noctalia.togglePanel(id)` | Opening **this** plugin's panel — not used, see below |
+| `noctalia.togglePanel(id)` | Opening **this** plugin's own panel, from the bar widget |
 | `ui.*` | Declarative tree |
 
 Opening *another* panel goes through the shell, not the API:
@@ -102,10 +101,11 @@ Opening *another* panel goes through the shell, not the API:
 | `noctalia msg plugins list` | Discovering installed plugins |
 | `noctalia msg settings-open-plugin <id>` | Another plugin's settings |
 
-`noctalia.togglePanel` is deliberately unused. It inverts, so pressing a card twice
-closes the panel the first press opened; the shell command brings a panel forward
-instead. Every community plugin that opens panels programmatically made the same
-swap — see [D20](07-decisions.md).
+`noctalia.togglePanel` is used for exactly one thing: the bar widget toggling this
+plugin's *own* panel, where inverting is correct. For **any other** panel a card
+uses `panel-open`, because inverting is wrong there — pressing a card twice must
+bring the panel forward, not dismiss it. Every community plugin that opens another
+plugin's panel made the same swap — see [D20](07-decisions.md).
 
 Types: `noctalia.d.luau` from the official plugins repository.
 
@@ -126,9 +126,10 @@ you check:
 | Per-widget colour overrides | `getColor(role)` gives theme roles, not the bar's per-widget layer |
 | Manual layout (`measure` + `setPosition`) | Plugin trees are laid out by the reconciler; geometry converges, not matches |
 
-All four absences are closed, not deferred. The first three are why the API table
-above is the whole surface; the last two are recorded in
-[D20](07-decisions.md). The last three are recorded in [D21](07-decisions.md).
+These are closed, not deferred. The first four are why the API table above is the
+whole surface. The panel-registry and cross-plugin rows are recorded in
+[D20](07-decisions.md); the service-pointer, per-widget-colour and manual-layout
+rows in [D21](07-decisions.md).
 
 ### The shell source is a reference, not a dependency
 
@@ -162,9 +163,13 @@ boundary as polling.
 
 ## UI primitives
 
-Used: `column`, `row`, `scroll`, `box`, `label`, `glyph`, `image`, `separator`,
-`spacer`, `progress`, `button`, `graph`, `input`, `select`, `toggle`, `slider`,
-`dragSource`, `dropZone`, `markdown`.
+Used by the panel: `column`, `row`, `scroll`, `box`, `label`, `glyph`, `image`,
+`separator`, `spacer`, `progress`, `button`, `graph`.
+
+Available but deliberately unused: `markdown` (the no-markup boundary,
+[01](01-vision.md)); `input` / `select` / `toggle` / `slider` (the panel is
+read-only in v1, and `select` is not even allowed in a persistent panel);
+`dragSource` / `dropZone` (the deferred editor, [D9](07-decisions.md)).
 
 Properties that matter for this layout:
 

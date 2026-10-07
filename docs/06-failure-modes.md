@@ -138,7 +138,7 @@ host list went from six to zero without a deploy is a broken card.
 ## A failed action is not a stale reading
 
 The rule above — keep the last good value, dim it, never zero it — is right for
-readings and wrong for actions. A card that says "restart plex" and shows `200 ok`
+readings and wrong for actions. A card that says "restart pocketbase" and shows `200 ok`
 from four minutes ago while the restart fails is lying, and it is lying about the
 one thing you acted on.
 
@@ -146,7 +146,7 @@ A failed `control:` therefore surfaces immediately and independently of the card
 value:
 
 ```
-▸ plex        200      from 14:02        ⚠ restart failed: 503
+▸ pocketbase        200      from 14:02        ⚠ restart failed: 503
 ```
 
 The value keeps its own staleness rules. The action gets its own, separate line,
@@ -186,8 +186,8 @@ panel shows six red rows instead of one.
 That is honest but not useful, because the operator's next question is always
 "which hop broke" — and the answer is not in the rows. So:
 
-- **A failing fetch states the hop.** `pct exec 101 -- sqlite3 ...` failing on a
-  dead node produces `ssh: connect to host pve.lan port 22: No route to host`, and
+- **A failing fetch states the hop.** `pct exec 100 -- sqlite3 ...` failing on a
+  dead node produces `ssh: connect to host pve.home.lan port 22: No route to host`, and
   that text goes in the card. The message names the cause.
 - **Cards sharing a source are grouped in the zone**, so the failure reads as a
   block rather than scattered singles.
