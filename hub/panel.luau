@@ -500,6 +500,14 @@ seed()
 --     validated and carried but not drawn. The buttons are pointer targets, so
 --     `capture_keys` still lists only "escape" and "r" — capturing a key the
 --     panel cannot honour takes it away from every other surface.
+--   span: 1|2                                  step 7, with the layout. A card
+--     that is twice as wide is a column decision, and the panel has no grid to
+--     put one in. It is validated, so a `span: 3` is still a config error rather
+--     than a silently dropped field.
+--   retries: N                                unbuilt. The interval is fixed and
+--     a failed fetch is `down` with its reason in the tooltip (docs/06); a
+--     retry inside the interval would be a second opinion about a reading the
+--     panel has already made honest. It is validated, so a typo is still a typo.
 --   search ("/"), the "?" overlay, Return  land with step 6, when there is
 --     something for them to act on.
 --   sparklines (`graph:`)                   step 4. A graph with no history yet

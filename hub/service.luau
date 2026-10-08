@@ -73,7 +73,6 @@ local function newRecord(card)
     state = "pending",
     text = "",
     fields = {},
-    rows = nil,
     rowCount = 0,
     error = nil,
     -- A config problem is not a fetch problem: it is already true before the
@@ -104,7 +103,6 @@ local function adoptRecords()
           record.state = previous.state
           record.text = previous.text
           record.fields = previous.fields
-          record.rows = previous.rows
           record.rowCount = previous.rowCount
           record.lastGoodAtMs = previous.lastGoodAtMs
           record.attempts = previous.attempts
@@ -293,7 +291,6 @@ local function applyReading(card, record, raw, err)
   record.state = reading.state
   record.text = reading.text
   record.fields = reading.fields
-  record.rows = reading.rows
   record.rowCount = reading.rowCount or 0
   record.lastGoodAtMs = nowMs()
 end

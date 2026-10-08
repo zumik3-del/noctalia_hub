@@ -193,15 +193,6 @@ end
 
 M.evaluate = evaluate
 
---- Row templates share the value syntax. `row_format: "{feed}  {title}"` on a
---- merged feed, `"{5}  {4}"` on `df -P` output after `split: whitespace`.
-function M.rowText(template, row)
-  if type(row) ~= "table" then
-    return scalarText(row)
-  end
-  return render(template, row, nil)
-end
-
 -- ── fetch ────────────────────────────────────────────────────────────────────
 
 local isString = Util.isString

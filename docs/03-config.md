@@ -233,7 +233,9 @@ card only": the description is the card's own second line now.
 
 `retries` is validated but not yet acted on. There is no retry loop to configure
 until step 2 lands, and a setting that does nothing is worse than an absent one —
-which is why the build records its own gaps rather than implying they work.
+which is why the build records its own gaps rather than implying they work. Both
+this and `span` are listed in the "not in this build" note at the bottom of
+`panel.luau`, next to the features waiting on a build-order step.
 
 **A value the `map` does not list is `down`, with the value shown.** Not `ok`
 because the list was not consulted, and not `warn` because it might be fine. A
