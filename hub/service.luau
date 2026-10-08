@@ -36,6 +36,17 @@ local doc = nil
 local cards = {}
 local fatal = ""
 
+--- configStamp  mtime:size of the config files as of the start of the last read
+--- loading      a read is in flight — yq is a subprocess, and a second one
+---              queued behind a slow first would apply its answer out of order
+local configStamp = nil
+local loading = false
+
+--- Defined below, called from tick: the change watch and the loader are mutually
+--- dependent, and a forward declaration beats reordering code that reads better
+--- in the order the collector actually runs.
+local load
+
 local function nowMs()
   return noctalia.nowMs()
 end
@@ -223,6 +234,20 @@ local function tickCard(card, record, stamp)
 end
 
 local function tick(stamp)
+  -- The host has no file-watch API: state.watch is the only subscription there
+  -- is, and it fires on a write, not on a file being edited. So the config is
+  -- watched by stat'ing it on the tick that already runs — one stat per second
+  -- against a file the plugin has to open anyway.
+  --
+  -- Returning rather than polling first: the cards in `doc` are the ones the file
+  -- used to describe. Polling them before the reload lands spends a subprocess on
+  -- a card the user may have just deleted, and a card added a moment ago stays
+  -- pending for one more poll interval it may not have wanted.
+  if Config.stamp() ~= configStamp then
+    load()
+    return
+  end
+
   if doc ~= nil then
     for _, domain in ipairs(doc.domains) do
       for _, card in ipairs(domain.cards) do
@@ -264,8 +289,24 @@ end)
 --- An invalid config never stops the collector: the panel needs something to
 --- render, and a config that cannot be read is itself something the panel
 --- reports rather than hides.
-local function load()
+load = function()
+  if loading then
+    -- Dropping the read rather than queueing it: a queued read answers a question
+    -- about a file that has already moved on, and applies its result after a newer
+    -- one. The stamp is left alone so the next tick notices the change is still
+    -- unapplied and tries again — losing a reload is better than showing a config
+    -- the user did not write.
+    return
+  end
+  loading = true
+
+  -- Taken before the read, not after: yq is a subprocess, so a file written while
+  -- it runs would otherwise be stamped as already-applied and never re-read.
+  local started = Config.stamp()
+
   Config.read(function(model, reason)
+    loading = false
+    configStamp = started
     fatal = reason or ""
     doc = model
 

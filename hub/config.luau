@@ -705,6 +705,31 @@ local function secretsPath()
   return noctalia.expandPath(M.dir .. "/" .. M.secretsFile)
 end
 
+--- A cheap fingerprint of the config files, for the collector's change watch.
+---
+--- Both files, not just hub.yaml: editing a secret leaves the document byte-for-
+--- byte identical while changing what it says, and a watch that only saw the
+--- document would keep serving the old token until something else happened to
+--- move the file again.
+---
+--- A missing file gets its own marker rather than being skipped, so creating
+--- hub.secrets.yaml after a config that needed none is still a change. It is also
+--- what stops a config that does not exist from looking like an unchanged one:
+--- `nil` twice compares equal, and a collector that treated "absent" as "steady"
+--- would never notice the file arriving.
+function M.stamp()
+  local parts = {}
+  for _, path in ipairs({ hubPath(), secretsPath() }) do
+    local info = noctalia.fileInfo(path)
+    if info == nil or info.isDir then
+      parts[#parts + 1] = "-"
+    else
+      parts[#parts + 1] = tostring(info.mtime) .. ":" .. tostring(info.size)
+    end
+  end
+  return table.concat(parts, "|")
+end
+
 --- yq converts YAML to JSON once per file change and the JSON is cached in the
 --- plugin data dir, so the price of YAML is paid at load rather than per render
 --- (D2). The cache is keyed on mtime and size, which is what makes a later hot
