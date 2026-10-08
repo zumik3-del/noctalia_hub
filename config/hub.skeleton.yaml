@@ -85,6 +85,44 @@ domains:
             argv: ["ssh", "proxmox", "sh -c 'apt-get update -qq >/dev/null || exit 1; apt-get -s -q upgrade | grep -c ^Inst || true'"]
           run: "ssh -t proxmox 'apt-get update && apt-get -y upgrade'"
 
+      # Two more container services: the same probe-plus-terminal shape as
+      # Pi-hole, one `pct enter` per LXC (103 Pulse, 118 Duplicati), plus the
+      # same Debian update badge — both containers run Debian, so the check is
+      # `pct exec ... sh -c`, written out rather than guessed (D17, D28).
+      - id: pulse
+        title: Pulse
+        glyph: heart-rate-monitor
+        kind: status
+        description: LXC & VM monitoring for Proxmox
+        link: https://pulse.home.lan/
+        run: "ssh -t proxmox 'pct enter 103'"
+        source:
+          type: command
+          argv: ["curl", "-k", "-sS", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "3", "https://pulse.home.lan/"]
+        updates:
+          interval_sec: 3600
+          source:
+            type: command
+            argv: ["ssh", "proxmox", "pct exec 103 -- sh -c 'apt-get update -qq >/dev/null || exit 1; apt-get -s -q upgrade | grep -c ^Inst || true'"]
+          run: "ssh -t proxmox 'pct exec 103 -- sh -c \"apt-get update && apt-get -y upgrade\"'"
+
+      - id: duplicati
+        title: Duplicati
+        glyph: cloud-upload
+        kind: status
+        description: Backup
+        link: https://backup.home.lan/
+        run: "ssh -t proxmox 'pct enter 118'"
+        source:
+          type: command
+          argv: ["curl", "-k", "-sS", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "3", "https://backup.home.lan/"]
+        updates:
+          interval_sec: 3600
+          source:
+            type: command
+            argv: ["ssh", "proxmox", "pct exec 118 -- sh -c 'apt-get update -qq >/dev/null || exit 1; apt-get -s -q upgrade | grep -c ^Inst || true'"]
+          run: "ssh -t proxmox 'pct exec 118 -- sh -c \"apt-get update && apt-get -y upgrade\"'"
+
       - id: storage
         title: Storage
         glyph: database
