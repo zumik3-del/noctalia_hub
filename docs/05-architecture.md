@@ -355,10 +355,15 @@ shipped.
    `fetch → extract → map → format` chain working. This is where `extract` and
    `ok_when` become real: both are jq over a payload, and neither has an
    implementation yet.
-3. **Remaining source types** — `command`, `rss`, `stream`, `static`.
+3. **Remaining source types** — `http`, `rss`, `stream`. **`command` and `static`
+   are done**: `command` carries the first real card (an HTTPS reachability
+   check through `curl`), because it needs no jq and reaches the LAN the panel is
+   about. `extract` and `ok_when` land with `http`, not before.
 4. **Thresholds, staleness, sparklines.**
 5. **Hot reload.**
-6. **Actions** — `link`, `link_template`, `deep_link`, `run:` via `runInTerminal`.
+6. **Actions** — `link` and `run:` are drawn as trailing buttons and executed
+   ([D26](07-decisions.md)); `link_template`, `deep_link` and `panel` are
+   validated and carried but not drawn.
 7. **Console cards** — `stream` with a ring buffer, torn down on panel close.
 8. **List cards** — `extract` widening to many, collapsed-to-count then expand.
 9. **Card editor** — `dragSource`/`dropZone`, writing back to `hub.yaml`.

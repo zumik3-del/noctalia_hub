@@ -66,17 +66,22 @@ only element present even when the domain is empty.
 ([D25](07-decisions.md)). Fixed structure:
 
 ```
-┌──┐  Title                      value  ●
+┌──┐  Title                      value  ●  ⇱  ⌨
 └──┘  Description
 ```
 
 - badge on the left: the card's glyph on a tinted rounded square, for
   identification scanned with a vertical glance
 - title on the first line, bold
-- description on the second line, dimmed; an error or a stale reading takes that
-  line's place rather than sitting under it, so a failure is never lost
+- description on the second line, dimmed; a failure does not displace it — the
+  reason sits in the state marker's tooltip, so a red card still says what it
+  measures and the reason waits one hover away on the dot ([D25](07-decisions.md))
 - value and status dot on the trailing edge, for the thing you actually came to
   read
+- action buttons after the dot: a link button opens the card's `link:` URL, a
+  terminal button runs its `run:` command. Each button has its own target, so a
+  card may carry both ([D26](07-decisions.md)); only those two are drawn in this
+  build
 
 A card with no `description` is one line tall. Right-alignment of values is
 mandatory: a column of numbers has to read as a scale.

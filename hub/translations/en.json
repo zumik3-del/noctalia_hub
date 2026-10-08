@@ -8,6 +8,8 @@
     "loading": "loading…"
   },
   "panel": {
+    "action_link": "Open in browser",
+    "action_terminal": "Open a terminal",
     "close": "Close",
     "name": "hub",
     "refresh": "Refresh",

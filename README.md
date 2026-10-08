@@ -4,8 +4,9 @@ An instrument panel for [Noctalia](https://noctalia.dev) v5 — a control centre
 showing links, service status, metrics and release feeds, opened beside the bar
 widget.
 
-> **Status: skeleton.** The plugin exists and opens; only `source: static` fetches.
-> `http`, `command`, `stream` and `rss` are validated and report themselves as
+> **Status: in progress.** The plugin exists and opens; `static` and `command`
+> sources fetch, and `link`/`run` actions are drawn as trailing buttons and
+> executed. `http`, `stream` and `rss` are validated and report themselves as
 > unbuilt. The panel renders every zone, every card kind and every card state, so
 > what is missing is transport, not layout. See
 > [docs/05-architecture.md](docs/05-architecture.md) for the build order.

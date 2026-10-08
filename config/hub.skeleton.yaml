@@ -4,14 +4,16 @@
 #
 #   cp config/hub.skeleton.yaml ~/.config/noctalia/hub/hub.yaml
 #
-# Every card here uses `source: { type: static }`, because `static` is the only
-# source type this build fetches (docs/05-architecture.md, build order). Nothing
-# in this file touches the network, a shell or a container, so it renders exactly
-# as written and is the fastest way to see the panel's shape.
+# Most cards here use `source: { type: static }`, which renders exactly as
+# written — the fastest way to see the panel's shape without touching anything.
+# `command` fetches now too, so the Pi-hole card below is a real reading: it
+# asks the host over HTTPS, and it carries the two trailing buttons, one to the
+# admin UI and one into the container.
 #
-# When http / command / stream / rss land, config/hub.example.yaml is the real
-# thing — and every one of its cards will say "not implemented in this build"
-# until then, which is the panel being honest rather than empty.
+# http / stream / rss are still recognised but not built: a card that uses one
+# says "not implemented in this build" rather than showing nothing, which is the
+# panel being honest rather than empty. config/hub.example.yaml is the full
+# thing, with worked examples of every field.
 #
 # Field reference: docs/03-config.md
 
@@ -46,7 +48,7 @@ domains:
   - id: services
     title: Services
     glyph: server
-    interval_sec: 30
+    interval_sec: 60
 
     cards:
       - id: gateway
@@ -73,6 +75,28 @@ domains:
           running: ok
           degraded: warn
           stopped: down
+
+      # The first card that is not static: it asks the service over HTTPS, so the
+      # dot is a real reading. No login is attempted and the redirect to Authelia
+      # counts as reachable — the question is "is the host answering", not "can we
+      # get in". `-k` because a LAN service may present a self-signed certificate,
+      # and a certificate warning is not the question either.
+      #
+      # `link` and `run` are the two trailing buttons — one opens the admin UI in
+      # the browser, the other drops into the container. `-t` gives the container
+      # the TTY `pct enter` needs; without it the shell opens and does nothing.
+      # The hop is `ssh` plus `pct exec` in one `run` string, shell-verbatim (D17).
+      - id: pihole
+        title: Pi-hole
+        glyph: shield-check
+        kind: status
+        description: DNS filtering and ad blocking
+        link: https://dns.home.lan/admin/
+        run: "ssh -t proxmox 'pct enter 100'"
+        source:
+          type: command
+          argv: ["curl", "-k", "-sS", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "3", "https://dns.home.lan/admin/"]
+        format: "online"
 
       # `format` and `unit` are the value column. `{n}` is the extracted value.
       - id: nodes
@@ -119,7 +143,7 @@ domains:
   - id: releases
     title: Releases
     glyph: tag
-    interval_sec: 900
+    interval_sec: 3600
 
     cards:
       - id: shell

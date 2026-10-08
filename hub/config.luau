@@ -297,10 +297,11 @@ end
 
 -- ── source ───────────────────────────────────────────────────────────────────
 
---- Only `static` is implemented in this build; the rest are recognised so that
---- a typo is still reported as a typo, and so the pipeline can say "not built
---- yet" rather than "no such type". See docs/05-architecture.md build order.
-local BUILT_SOURCE_TYPES = { static = true }
+--- `static` and `command` are implemented in this build; the rest are
+--- recognised so that a typo is still reported as a typo, and so the pipeline
+--- can say "not built yet" rather than "no such type". See
+--- docs/05-architecture.md build order.
+local BUILT_SOURCE_TYPES = { static = true, command = true }
 
 local function readSource(raw, path, sink)
   if raw == nil then
@@ -419,49 +420,36 @@ local function readMap(raw, path, sink)
   return out
 end
 
---- At most one action per card, and that rule is enforced rather than resolved
---- by precedence — a card whose click target is ambiguous is a card nobody
---- trusts (D15).
+--- Actions are buttons on the card's trailing edge, so two is no longer the
+--- ambiguity the old one-action rule guarded against. `link` and `run` sit side
+--- by side, each with its own target, and a click on one cannot mean the other —
+--- a stronger separation than the single card-wide click the rule was written
+--- for (D15, D26). `control` is still deferred and still needs a confirm.
 local function readActions(card, path, sink)
-  local found = {}
-  local count = 0
+  local actions = {}
 
   for _, field in ipairs(M.ACTIONS) do
-    if card[field] ~= nil then
-      count = count + 1
-      found[#found + 1] = field
+    local value = card[field]
+    if value ~= nil then
+      if field == "control" then
+        if not isTable(value) then
+          sink.add(path .. ".control", "expected a mapping of control options")
+        elseif card.confirm == nil then
+          sink.add(path, "'control' requires 'confirm' — a control always names its target before it fires (D15)")
+        end
+        -- deferred to a later version; see docs/05-architecture.md
+      elseif not isString(value) or value == "" then
+        sink.add(path .. "." .. field, "expected a non-empty string")
+      else
+        actions[field] = value
+      end
     end
   end
 
-  if count > 1 then
-    table.sort(found)
-    sink.add(path, "a card carries at most one action, found " .. table.concat(found, " and "))
+  if next(actions) == nil then
     return nil
   end
-  if count == 0 then
-    return nil
-  end
-
-  local field = found[1]
-  local value = card[field]
-
-  if field == "control" then
-    if not isTable(value) then
-      sink.add(path .. ".control", "expected a mapping of control options")
-      return nil
-    end
-    if card.confirm == nil then
-      sink.add(path, "'control' requires 'confirm' — a control always names its target before it fires (D15)")
-    end
-    return nil -- deferred to a later version; see docs/05-architecture.md
-  end
-
-  if not isString(value) or value == "" then
-    sink.add(path .. "." .. field, "expected a non-empty string")
-    return nil
-  end
-
-  return { field = field, value = value }
+  return actions
 end
 
 -- ── card ─────────────────────────────────────────────────────────────────────
@@ -577,7 +565,7 @@ local function readCard(raw, path, seenIds, defaults, sink)
     add(path, "kind: metric needs 'thresholds' — without them a green number says nothing (D10)")
   end
 
-  card.action = readActions(raw, path, own)
+  card.actions = readActions(raw, path, own)
 
   -- `link_template` is built from extracted fields by definition, so a template
   -- with no placeholder is a forgotten `{tag}`.
@@ -587,8 +575,8 @@ local function readCard(raw, path, seenIds, defaults, sink)
   -- source's: xyOps takes `tags:_error` on its API and `result=error` in its UI,
   -- and that mapping is the config author's knowledge, not something a placeholder
   -- can derive (D14). `{query}` is available and optional, not required.
-  if card.action ~= nil and card.action.field == "link_template" then
-    if not card.action.value:find("{", 1, true) then
+  if card.actions ~= nil and card.actions.link_template ~= nil then
+    if not card.actions.link_template:find("{", 1, true) then
       add(path .. ".link_template", "template has no {field} placeholder — expected e.g. {tag} or {n}")
     end
   end
@@ -629,6 +617,17 @@ local function readDomain(raw, index, seenIds, cardIds, defaults, sink)
   domain.intervalSec = readPositive(raw.interval_sec, path .. ".interval_sec", own, defaults.intervalSec)
   domain.staleAfterSec = readPositive(raw.stale_after_sec, path .. ".stale_after_sec", own, defaults.staleAfterSec)
 
+  -- A card inherits its zone's interval and staleness, not the global defaults.
+  -- The domain's `interval_sec` is "the whole of release polling" (D4): a zone
+  -- that declares 900 must make its cards poll every 900, or the field is a
+  -- comment. `timeout_ms` has no domain-level field, so it stays the global one.
+  local cardDefaults = {
+    intervalSec = domain.intervalSec,
+    staleAfterSec = domain.staleAfterSec,
+    timeoutMs = defaults.timeoutMs,
+    graphPoints = defaults.graphPoints,
+  }
+
   if raw.pin ~= nil then
     if raw.pin ~= "bottom" then
       add(path .. ".pin", "expected \"bottom\" or nothing, got " .. string.format("%q", tostring(raw.pin)))
@@ -644,7 +643,7 @@ local function readDomain(raw, index, seenIds, cardIds, defaults, sink)
     add(path .. ".cards", "expected a list of cards")
   else
     for i, rawCard in ipairs(cards) do
-      domain.cards[#domain.cards + 1] = readCard(rawCard, path .. ".cards[" .. i .. "]", cardIds, defaults, sink)
+      domain.cards[#domain.cards + 1] = readCard(rawCard, path .. ".cards[" .. i .. "]", cardIds, cardDefaults, sink)
     end
   end
 

@@ -205,10 +205,88 @@ end
 
 -- ── fetch ────────────────────────────────────────────────────────────────────
 
---- Only `static` fetches in this build. The other four are recognised by
---- config.luau so a typo is still reported as a typo; here they produce an
---- honest "not built yet" rather than an empty reading, because a card that
---- silently shows nothing is the failure mode this panel exists to avoid.
+local function isString(v)
+  return type(v) == "string"
+end
+
+local function trim(text)
+  return (tostring(text):gsub("^%s+", ""):gsub("%s+$", ""))
+end
+
+--- `command` is the source that carries a reading from anything the shell can
+--- reach: a local binary, or `ssh` plus `pct exec` into a container (D17). It
+--- is one branch here, and nothing downstream of it knows which produced the
+--- bytes — `map`, `thresholds` and `format` run exactly as they do for `static`.
+---
+--- A non-zero exit is `down` and stderr is the reason, never a code→state table:
+--- `pct exec` exits non-zero for a stopped container and for a failed command,
+--- so a mapping would render two different faults as the same dot (D17).
+local function fetchCommand(card, source, done)
+  local raw = source.raw
+  local runnable = nil
+  if type(raw.argv) == "table" and #raw.argv > 0 then
+    runnable = raw.argv
+  elseif isString(raw.cmd) and raw.cmd ~= "" then
+    runnable = raw.cmd
+  else
+    done(nil, "command source has neither 'argv' nor 'cmd'")
+    return
+  end
+
+  local accepted = noctalia.runAsync(runnable, function(result)
+    result = result or {}
+    if result.timedOut then
+      done(nil, "timed out after " .. tostring(card.timeoutMs) .. " ms")
+      return
+    end
+    if (result.exitCode or 0) ~= 0 then
+      -- stderr is the usual place a tool explains itself, but not every tool
+      -- uses it: `dig` prints "connection timed out" on stdout and exits 9. The
+      -- card should carry whichever stream spoke, and only name the code when
+      -- neither did.
+      local message = result.stderr
+      if message == nil or trim(message) == "" then
+        message = result.stdout
+      end
+      if message == nil or trim(message) == "" then
+        message = "exit code " .. tostring(result.exitCode)
+      end
+      done(nil, trim(message))
+      return
+    end
+
+    -- `parse` decides the stream and the shape where the bytes were produced:
+    -- `json` decodes stdout, `stderr` reads the other stream, `stdout` is the
+    -- default. This is the alternative to a `jq` pipeline buried in a shell
+    -- string whose quoting is already fragile (D17).
+    local out = result.stdout or ""
+    if raw.parse == "stderr" then
+      out = result.stderr or ""
+    end
+
+    if raw.parse == "json" then
+      local value, err = noctalia.json.decode(out)
+      if value == nil then
+        done(nil, "command output is not JSON: " .. tostring(err))
+        return
+      end
+      done(value, nil)
+      return
+    end
+
+    done(trim(out), nil)
+  end, card.timeoutMs)
+
+  if not accepted then
+    done(nil, "command could not be started")
+  end
+end
+
+--- Only `static` and `command` fetch in this build. The other three are
+--- recognised by config.luau so a typo is still reported as a typo; here they
+--- produce an honest "not built yet" rather than an empty reading, because a
+--- card that silently shows nothing is the failure mode this panel exists to
+--- avoid.
 function M.fetch(card, done)
   local source = card.source
 
@@ -219,6 +297,11 @@ function M.fetch(card, done)
 
   if source.type == "static" then
     done(source.raw.value, nil)
+    return
+  end
+
+  if source.type == "command" then
+    fetchCommand(card, source, done)
     return
   end
 

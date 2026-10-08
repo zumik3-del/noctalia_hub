@@ -200,9 +200,9 @@ expansion rather than treated as an error.
 ## D12. The panel acts, but only by delegating
 
 **Decision.** A card may declare `run:`, which hands a shell command to the user's
-terminal via `noctalia.runInTerminal`. `link` and `run` are mutually exclusive and
-both together is a validation error. `run` is a literal string with no
-interpolation.
+terminal via `noctalia.runInTerminal`. `run` is a literal string with no
+interpolation. (`link` and `run` were once mutually exclusive; D26 makes both
+trailing buttons, so they may share a card.)
 
 **Why.** The panel was going to be read-only, and it turns out the most natural
 click on a "Dynacat" card is not "open the URL" but "let me ssh in". Nineteen
@@ -346,6 +346,11 @@ footer, so "who restarted pve at 3am" has an answer.
 **`control` joins the action mutual-exclusion set.** A card carries at most one of
 `link`, `link_template`, `deep_link`, `panel`, `run`, `control`. This is what stops
 a card from being both a navigation target and a write target.
+
+**Superseded in part.** D26 makes actions trailing *buttons*, so two navigational
+actions on one card are no longer ambiguous and are allowed. The mutual exclusion
+now scopes to `control` alone: it is the one action that changes something and must
+not share a card with another.
 
 ---
 
@@ -765,10 +770,14 @@ the at-a-glance panel survived (D24). The author wants a landing tab to grow a
 custom dashboard on, so `overview` takes that slot and stays blank until it does.
 The one-zone-per-domain tabs are unchanged; only the aggregate default is gone.
 
-**Why the description shares the line with failures.** An error or a stale reading
-takes the second line's place instead of stacking under it. Two lines is the
-block's budget; a third would make every failing card taller than a working one and
-the panel would jump as services flap (docs/06-failure-modes.md).
+**Why the failure moved off the card.** An error briefly took the second line's
+place here. It does not any more: the reason a card is not ok lives on the **state
+marker's tooltip**, and the description keeps its line. A failure that replaces what
+the card measures produces a card you cannot read while it is broken — the one
+moment you most want to know what it is — and a column of them makes the panel jump
+as services flap. The dot is already the element coloured for the state, so the
+explanation sitting behind a hover on it is one gesture from the colour that asked
+the question (docs/06-failure-modes.md).
 
 **Rejected.** Always-on descriptions *with* a `show_descriptions` switch — the
 switch was and remains rejected (D18); the line is the card's own now, so there is
@@ -783,6 +792,42 @@ the second line, so a zone of eighteen described cards is eighteen two-line
 blocks. That is affordable now because a tab holds one zone, not the whole panel.
 Selection, when it lands, has no description left to reveal and can use the row for
 something else.
+
+---
+
+## D26. Actions are buttons; the one-action rule is retired
+
+**Decision.** An action renders as a button on the card's trailing edge, not as a hit
+area over the whole card. `link` and `run` may sit on one card, because each button
+has its own target. The "at most one action per card" rule (D15) no longer applies to
+the navigational actions; `control` stays out of the button set until its own step
+lands.
+
+**Why.** The one-action rule existed to stop a card having an ambiguous click target.
+If the whole card is one hit area, two actions make the click a coin toss — that is
+the fault D15 refused. A button removes the ambiguity by construction: there is no
+shared hit area, so "a link and a terminal on the Pi-hole card" is not a card that
+does two things on one click, it is a card with two clearly separated controls, the
+same shape as the header's refresh and close buttons.
+
+**Why `link` and `run` are the first two.** They are the pair a real service card
+wants: one to open the thing, one to get into the machine behind it (`ssh` plus
+`pct exec`, D17). The Pi-hole card is exactly that pair, and it forced the rule.
+
+**Rejected.**
+
+- *Keeping the rule and folding the actions into a menu.* A menu hides the target
+  behind a click and a list, which is worse for a five-second glance than two icons.
+- *A separate `terminal:` field.* `run:` already carries the command; a second field
+  would restate it and split one concept across two names.
+- *Drawing `link_template`, `deep_link` and `panel` as buttons now.* They are carried
+  and validated, but each needs its own interpolation or target resolution. They
+  become buttons when their step does, not before.
+
+**Consequence.** The mutual exclusion D15 described is now scoped to `control`
+alone. The schema's action fields are unchanged; only the rule about how many may
+coexist changed, and the buttons are drawn by the panel while execution stays on the
+collector's side of the boundary ([D12](#d12-the-panel-acts-but-only-by-delegating)).
 
 ---
 

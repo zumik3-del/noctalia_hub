@@ -21,6 +21,13 @@ clears on its own when the source recovers. `configError` is a problem with the 
 itself — a bad field, a missing secret — and is already true before the first poll,
 because it came from reading the file rather than from fetching anything.
 
+Whichever channel is speaking, the reason appears on the **state marker's
+tooltip**, not in the card body: hover the coloured dot to see a source error, a
+config error, or the age of a stale reading. The description keeps its line, so a
+failing card still says what it measures. The document-level block above the zones
+still lists every config error with its path; the tooltip is where the card's own
+reason waits.
+
 Staleness needs something to be stale about. A card that has **never** succeeded
 stays `down` indefinitely rather than aging into a dimmer `down`, because there is
 no reading for the age to qualify.

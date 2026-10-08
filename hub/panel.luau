@@ -41,6 +41,17 @@ local activeTab = OVERVIEW
 --- it lives with the other view state and never crosses to the collector.
 local hovered = nil
 
+--- Buttons ask the collector to act through the same channel refresh uses: the
+--- panel is a subscriber and never launches a process itself
+--- (docs/05-architecture.md). The sequence number makes a second click a
+--- distinct write, so the watcher fires even when the target is unchanged.
+local actionSeq = 0
+
+local function dispatchAction(action, target)
+  actionSeq = actionSeq + 1
+  noctalia.state.set("hub.cmd", { action = action, target = target, seq = actionSeq })
+end
+
 -- ── visual language (docs/04-visual-language.md) ─────────────────────────────
 
 --- Colour is semantic only: four signal roles. No free-form colour exists in the
@@ -188,34 +199,42 @@ local function ageLine(record)
   return table.concat(parts, " · ")
 end
 
---- The second line under a card, when there is something the value column cannot
---- say by itself. A config problem outranks a fetch problem: it is the reason the
---- fetch may never succeed at all.
+--- The reason a card is not ok, as one line for the state marker's tooltip. A
+--- config problem outranks a fetch problem: it is the reason the fetch may never
+--- succeed. A stale card with no error shows its age instead, so the dimmed dot
+--- explains itself too.
 ---
 --- A card with no record has no `configError` — a card that failed validation
 --- never got one. Its errors live on the card itself, which is the only place they
 --- can be read from, so this is where a card with no `id` still reports itself.
-local function cardSecondLine(card, record, size)
-  if record.configError ~= nil then
-    return ui.label({ text = record.configError, fontSize = size, color = "error", maxLines = 2 })
+local function cardProblem(card, record)
+  if record ~= nil then
+    if record.configError ~= nil then
+      return record.configError
+    end
+    if record.error ~= nil then
+      return record.error
+    end
+    if record.state == "stale" then
+      return ageLine(record)
+    end
   end
 
   if #(card.errors or {}) > 0 then
-    return ui.label({ text = card.errors[1].message, fontSize = size, color = "error", maxLines = 2 })
+    return card.errors[1].message
   end
 
-  if record.error ~= nil then
-    return ui.label({
-      text = record.error,
-      fontSize = size,
-      color = STATE_COLOR[record.state] or SECONDARY,
-      maxLines = 2,
-    })
-  end
+  return nil
+end
 
-  -- The description is the ordinary second line: what the thing is. An error or a
-  -- frozen reading outranks it, because a card that only says what it measures,
-  -- while its value stopped moving, is the panel lying (docs/06-failure-modes.md).
+--- The second line under a card: what the thing is. A failure no longer takes
+--- this line — it lives in the state marker's tooltip instead (D25), so a red
+--- card still says what it measures while the reason waits one hover away on the
+--- dot that is already coloured for it.
+---
+--- The age stays here when there is no description to show, because a frozen
+--- reading with no age reads as a live one (docs/06-failure-modes.md).
+local function cardSecondLine(card, record, size)
   if type(card.description) == "string" and card.description ~= "" then
     return ui.label({ text = card.description, fontSize = size, color = SECONDARY, maxLines = 2 })
   end
@@ -234,18 +253,17 @@ end
 --- left, a two-line column in the middle, and the reading plus its state marker on
 --- the right.
 ---
----     ┌──┐  Title                        34%  ●
+---     ┌──┐  Title                  34%  ●  ⇱  ⌨
 ---     └──┘  Description
 ---
 --- The badge is kanban's avatar slot: hub has no images, so it fills it with the
 --- card's glyph on a tinted rounded square, which is exactly what kanban does for
 --- the rows that have no avatar.
 ---
---- The second line is the description; an error or a stale reading takes its place
---- rather than sitting under it, so a failure is never lost to the layout
---- (docs/06-failure-modes.md). The reading stays on the trailing edge: a column of
---- numbers has to read as a scale, and that does not change because the row grew a
---- second line.
+--- The second line is the description. A failure does not take its place: the
+--- reason lives on the state marker's tooltip, so a red card still says what it
+--- measures (docs/06-failure-modes.md). The reading stays on the trailing edge — a
+--- column of numbers has to read as a scale — and the action buttons follow it.
 ---
 --- `sizes` is the density table, not a font size: a card needs both a font size
 --- and padding, and passing two numbers around invites swapping them. `index` is
@@ -297,6 +315,65 @@ local function renderCard(card, record, sizes, index)
     lines[#lines + 1] = second
   end
 
+  -- The reading and its state marker, then the card's buttons. Each button has
+  -- its own target, so two of them is not the ambiguity the old one-action rule
+  -- guarded against — a click on one cannot mean the other (D15, D26). Only
+  -- `link` and `run` are drawn; `panel`, `deep_link` and `control` are still
+  -- schema, not buttons.
+  --
+  -- The marker carries the reason when there is one. `ui.glyph` takes no tooltip
+  -- (only wrappable types do), so the dot is wrapped in a box that does — this is
+  -- the node the colour already points at, which is where the explanation belongs.
+  local marker = ui.glyph({ name = STATE_GLYPH[state] or STATE_GLYPH.pending, size = size, color = stateColor })
+  local problem = cardProblem(card, record)
+  if problem ~= nil then
+    marker = ui.box({ tooltip = problem }, { marker })
+  end
+
+  local trailing = {
+    ui.label({
+      text = value,
+      fontSize = size - 1,
+      textAlign = "end",
+      color = stateColor,
+      maxLines = 1,
+    }),
+    marker,
+  }
+
+  if card.actions ~= nil then
+    if card.actions.link ~= nil then
+      trailing[#trailing + 1] = ui.button({
+        glyph = "external-link",
+        variant = "ghost",
+        controlSize = "sm",
+        tooltip = noctalia.tr("panel.action_link"),
+        onClick = function()
+          dispatchAction("link", card.actions.link)
+        end,
+      })
+    end
+    if card.actions.run ~= nil then
+      trailing[#trailing + 1] = ui.button({
+        glyph = "terminal-2",
+        variant = "ghost",
+        controlSize = "sm",
+        tooltip = noctalia.tr("panel.action_terminal"),
+        onClick = function()
+          dispatchAction("run", card.actions.run)
+        end,
+      })
+    end
+  end
+
+  local children = {
+    leading,
+    ui.column({ flexGrow = 1, gap = 3 }, lines),
+  }
+  for _, node in ipairs(trailing) do
+    children[#children + 1] = node
+  end
+
   return ui.row({
     key = key,
     gap = sizes.cardPadH,
@@ -314,18 +391,7 @@ local function renderCard(card, record, sizes, index)
         render()
       end
     end,
-  }, {
-    leading,
-    ui.column({ flexGrow = 1, gap = 3 }, lines),
-    ui.label({
-      text = value,
-      fontSize = size - 1,
-      textAlign = "end",
-      color = stateColor,
-      maxLines = 1,
-    }),
-    ui.glyph({ name = STATE_GLYPH[state] or STATE_GLYPH.pending, size = size, color = stateColor }),
-  })
+  }, children)
 end
 
 -- ── zones ────────────────────────────────────────────────────────────────────
@@ -738,10 +804,11 @@ seed()
 -- Each of these is a build-order item, not a missing idea. Saying where it goes
 -- is more useful than leaving it to be rediscovered.
 --
---   actions (link / panel / run / control)  step 6. No block has an onClick yet,
---     which is also why `capture_keys` lists only "escape" and "r": capturing a
---     key the panel cannot honour takes it away from every other surface.
---     Hover is wired (it is presentation) but nothing activates.
+--   link_template / deep_link / panel / control  step 6, partial. `link` and
+--     `run` are drawn as trailing buttons and executed; the other four are
+--     validated and carried but not drawn. The buttons are pointer targets, so
+--     `capture_keys` still lists only "escape" and "r" — capturing a key the
+--     panel cannot honour takes it away from every other surface.
 --   search ("/"), the "?" overlay, Return  land with step 6, when there is
 --     something for them to act on.
 --   sparklines (`graph:`)                   step 4. A graph with no history yet

@@ -352,6 +352,26 @@ domains:
 
     cards:
       # --- Pi-hole ------------------------------------------------------------
+      # Liveness first: an HTTPS request to the service, no login, so the dot
+      # answers "is the host answering" without a token the REST API would need.
+      # Any HTTP response counts — the redirect to Authelia is a live host, not a
+      # failure. `-k` is for a self-signed certificate, which is not the question
+      # either. The two trailing buttons are the card's actions — one to the admin
+      # UI, one into the container. Both may sit on one card because each button
+      # has its own target (D26), and the hop is D17's ssh + pct exec, with `-t`
+      # so `pct enter` gets a TTY.
+      - id: pihole
+        title: Pi-hole
+        glyph: shield-check
+        kind: status
+        description: DNS filtering and ad blocking
+        link: https://dns.home.lan/admin/
+        run: "ssh -t pve.home.lan 'pct enter 100'"
+        source:
+          type: command
+          argv: ["curl", "-k", "-sS", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "3", "https://dns.home.lan/admin/"]
+        format: "online"
+
       # COUNT(DISTINCT domain), not COUNT(*). The gravity table's uniqueness is
       # enforced on the (domain, adlist_id) PAIR, not on domain alone — a domain
       # that appears in three subscribed lists occupies three rows. Counting rows

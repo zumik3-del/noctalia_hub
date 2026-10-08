@@ -272,8 +272,8 @@ end
 --- subscriber, and starting work belongs on this side of the boundary. Making
 --- every card due on the next tick is the whole of it — this does not bypass
 --- `stale_after_sec`, it just does not wait for the next scheduled poll.
-noctalia.state.watch(STATE_CMD, function(command)
-  if command ~= "refresh" or doc == nil then
+local function refreshSoon()
+  if doc == nil then
     return
   end
   for _, domain in ipairs(doc.domains) do
@@ -282,6 +282,41 @@ noctalia.state.watch(STATE_CMD, function(command)
       if record ~= nil then
         record.nextDueAtMs = 0
       end
+    end
+  end
+end
+
+--- A card's trailing buttons ask the collector to act, the way refresh does:
+--- the panel does not launch a process, it publishes a request and stays a
+--- subscriber (docs/05-architecture.md). `link` opens the browser and nothing
+--- else; `run` hands a literal string to a terminal window, which is the whole
+--- difference between the two actions (D12, D20).
+local function performAction(action, target)
+  if action == "link" then
+    noctalia.runAsync({ "xdg-open", target })
+    return
+  end
+
+  if action == "run" then
+    -- The feature check follows tailscale: a shell without `runInTerminal`
+    -- still runs the command, it just does not show a window.
+    if type(noctalia.runInTerminal) == "function" then
+      noctalia.runInTerminal(target)
+    else
+      noctalia.runAsync(target)
+    end
+  end
+end
+
+noctalia.state.watch(STATE_CMD, function(command)
+  if command == "refresh" then
+    refreshSoon()
+    return
+  end
+
+  if type(command) == "table" and type(command.action) == "string" then
+    if type(command.target) == "string" and command.target ~= "" then
+      performAction(command.action, command.target)
     end
   end
 end)

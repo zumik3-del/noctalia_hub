@@ -210,11 +210,12 @@ A single line saying what the thing is, for when you cannot tell from the name.
 reading and its state marker on the trailing edge. A card with no description is
 one line tall.
 
-An error or a stale reading takes the second line's place rather than sitting
-under it, so a failure is never hidden by the layout
-([06](06-failure-modes.md)). This reverses D18's "selected card only": that rule
-was written when the card carried no second line of its own, and the description
-now shares it with the failure text instead of competing with it.
+A failure does not take the second line. The reason a card is not ok — a source
+error, a config error, or the age of a stale reading — is shown on the **state
+marker's tooltip**: hover the coloured dot and the reason appears. The body stays
+readable, so a red card still says what it measures
+([D25](07-decisions.md), [06](06-failure-modes.md)). This reverses D18's "selected
+card only": the description is the card's own second line now.
 
 ### Data
 
@@ -225,9 +226,9 @@ now shares it with the failure text instead of competing with it.
 | `source.extract` | jq expression collapsing the payload into a value (or many) |
 | `source.parse` | `json` \| `stdout` \| `stderr` — how command output is read |
 | `map` | Extracted value ⇒ state, e.g. `{ 0: ok, 1: down }` |
-| `interval_sec` | Poll period; inherited from `defaults` |
-| `timeout_ms` | Timeout; defaults to 8000 |
-| `stale_after_sec` | Age at which the card dims; defaults to 300 |
+| `interval_sec` | Poll period; inherited from the zone, which inherits `defaults` |
+| `timeout_ms` | Timeout; defaults to 8000 (there is no zone-level override) |
+| `stale_after_sec` | Age at which the card dims; inherited from the zone, which defaults to 300 |
 | `retries` | Retry count on failure |
 
 `retries` is validated but not yet acted on. There is no retry loop to configure
@@ -280,25 +281,31 @@ than accepting a card whose amber is unreachable.
 
 ## Actions
 
-A card can do something on click. **At most one action per card**, drawn from:
+A card can do something. An action is a **button on the card's trailing edge**, not
+a hit area over the whole card, so a card may carry more than one: `link` and `run`
+sit side by side, each with its own target, and a click on one cannot mean the other
+([D26](07-decisions.md)).
 
-| Field | Kind | Effect |
+| Field | Drawn as | Effect |
 |---|---|---|
-| `link` | string | Open a URL |
-| `link_template` | string | Open a URL built from extracted fields |
-| `deep_link` | string | Open a URL built from the source's own query plus extracted fields |
-| `panel` | string | Open another Noctalia panel |
-| `run` | string | Run a shell command in the user's terminal |
-| `control` | block | Write to a remote system |
+| `link` | link button | Open a URL in the browser |
+| `run` | terminal button | Run a shell command in the user's terminal |
+| `link_template` | — | Open a URL built from extracted fields (not drawn yet) |
+| `deep_link` | — | Open a URL built from the source's own query plus extracted fields (not drawn yet) |
+| `panel` | — | Open another Noctalia panel (not drawn yet) |
+| `control` | — | Write to a remote system — deferred ([D15](07-decisions.md)) |
 
-The first five navigate or launch. `control` is the only one that changes
-something, and it is the only one that takes a block rather than a string. See
-[D15](07-decisions.md).
+Only `link` and `run` are drawn in this build; the other four are validated and
+carried in the model and become buttons when their step lands. Each button has its
+own target, so two of them is not the ambiguity the old one-action rule guarded
+against — the rule that survives is scoped to `control`, which is the one action
+that changes something and must not share a card with another.
 
-Two actions on one card is a validation error, not a silent precedence rule. A card
-whose click target is ambiguous is a card nobody trusts. `control` is in this list
-for exactly that reason — a card with both a `link` and a `control` would be a
-card that does two different things on the same click.
+`link` opens the browser and nothing else. `run` opens a terminal window, because
+the user asked to watch a command run. The two share a mechanism — both are handed
+to the collector, which runs them — and must not share a cost model. A window
+flashing open to display `ok` is a regression wearing delegation's clothes
+([D20](07-decisions.md)).
 
 ### panel — open another Noctalia surface
 
@@ -770,6 +777,13 @@ hosts". Collected and verified against real `caddy adapt` output; the failure mo
 is that a card shows nothing and looks healthy.
 
 ### command
+
+**`command` is implemented in this build** alongside `static`; `http`, `stream` and
+`rss` are still recognised-but-not-built. A non-zero exit is `down`, and the tool's
+own text — stderr first, then stdout — goes in the card; exit codes are never mapped
+to states ([06](06-failure-modes.md)). On success the reading is stdout, or the
+decoded JSON when `parse: json` is set. `parse: stderr` reads the other stream for
+the tools that report what you want there.
 
 Executed directly, no shell:
 
