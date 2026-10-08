@@ -12,6 +12,7 @@
   Documentation: docs/03-config.md.  Rationale: docs/07-decisions.md.
 ]]
 
+local Config = require("./config.luau")
 local Util = require("./util.luau")
 
 local M = {}
@@ -151,7 +152,7 @@ local function evaluate(card, raw)
     end
 
     local rows = {}
-    local limit = card.maxItems or 10
+    local limit = card.maxItems or Config.DEFAULT_MAX_ITEMS
     for i, row in ipairs(raw) do
       if i > limit then
         break

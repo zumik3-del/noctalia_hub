@@ -59,6 +59,10 @@ M.DEFAULT_LAYOUT = {
 --- The rest of this file reads it by its short name; the export is above.
 local DEFAULT_LAYOUT = M.DEFAULT_LAYOUT
 
+--- `max_items` is a schema field and a pipeline bound at once, so the number
+--- lives here rather than once in each of the two layers that needs it.
+M.DEFAULT_MAX_ITEMS = 10
+
 local DEFAULT_DEFAULTS = {
   intervalSec = 60,
   timeoutMs = 8000,
@@ -611,7 +615,7 @@ local function readCard(raw, path, seenIds, defaults, sink)
   card.thresholds = readThresholds(raw.thresholds, path .. ".thresholds", own)
   card.valueMap = readMap(raw.map, path .. ".map", own)
   card.unit = isString(raw.unit) and raw.unit or nil
-  card.maxItems = readPositive(raw.max_items, path .. ".max_items", own, 10)
+  card.maxItems = readPositive(raw.max_items, path .. ".max_items", own, M.DEFAULT_MAX_ITEMS)
 
   if isString(raw.format) then
     card.format = raw.format

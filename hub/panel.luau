@@ -21,7 +21,13 @@
   the bottom of this file.
 ]]
 
+local Config = require("./config.luau")
 local Visual = require("./visual.luau")
+
+--- Both requires are for constants, not for behaviour: Config.DEFAULT_LAYOUT is
+--- where a field's absent value is decided, and the view is not a second opinion
+--- on that. config.luau's IO half is never reached from here — the panel reads
+--- the document the collector published, like everything else (docs/05).
 
 local STATE_CONFIG = "hub.config"
 local STATE_CARDS = "hub.cards"
@@ -85,9 +91,14 @@ end
 --- `font_scale` is applied to every text size at render time. Keeping it a
 --- multiplier over the density base — rather than a second set of literal sizes —
 --- is what stops the two from disagreeing (D24).
+---
+--- No clamp: config.luau already rejects a `font_scale` outside 80..130 as a
+--- config error, because pinning a typo to 130 hides the typo. Clamping here as
+--- well would draw the corrected value and show nothing in the config-errors
+--- block, which is the one place the author looks. The `or` only covers a
+--- document with no layout at all — see service.luau's fatal path.
 local function fontSize(size)
-  local scale = tonumber(layoutConf().fontScale) or 100
-  scale = math.max(80, math.min(130, scale))
+  local scale = tonumber(layoutConf().fontScale) or Config.DEFAULT_LAYOUT.fontScale
   return math.floor(size * scale / 100 + 0.5)
 end
 
@@ -95,16 +106,17 @@ local function style()
   return DENSITY[layoutConf().density] or DENSITY.compact
 end
 
+--- Every default below comes from Config.DEFAULT_LAYOUT rather than being
+--- repeated here. The layer that validates hub.yaml owns what a field is worth
+--- when it is absent; a second copy in the view is the same number waiting to
+--- drift, and it drifts silently — the panel keeps drawing while the schema
+--- documents something else.
 local function cardRadius()
-  local value = tonumber(layoutConf().cardRadius)
-  if value ~= nil then return value end
-  return 9
+  return tonumber(layoutConf().cardRadius) or Config.DEFAULT_LAYOUT.cardRadius
 end
 
 local function cardSpacing()
-  local value = tonumber(layoutConf().cardSpacing)
-  if value ~= nil then return value end
-  return 8
+  return tonumber(layoutConf().cardSpacing) or Config.DEFAULT_LAYOUT.cardSpacing
 end
 
 --- A card's fill is one of three theme states, never a colour. `tinted` and
@@ -138,7 +150,7 @@ local function clockPattern()
   if doc ~= nil and doc.layout ~= nil and type(doc.layout.clock) == "string" then
     return doc.layout.clock
   end
-  return "%H:%M:%S"
+  return Config.DEFAULT_LAYOUT.clock
 end
 
 -- ── rows ─────────────────────────────────────────────────────────────────────

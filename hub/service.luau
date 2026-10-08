@@ -204,7 +204,12 @@ local function publish()
   publishedSignature = sig
 
   noctalia.state.set(STATE_FATAL, fatal)
-  noctalia.state.set(STATE_CONFIG, doc or { domains = {}, errors = {} })
+  -- The fatal path still publishes a document, and the panel renders it: a config
+  -- that could not be read must not crash the view that is supposed to report it.
+  -- It carries `Config.DEFAULT_LAYOUT` for exactly that reason — the panel reads
+  -- its radius, spacing and font scale out of `doc.layout` and the schema's own
+  -- defaults are what keeps those reads off nil.
+  noctalia.state.set(STATE_CONFIG, doc or { layout = Config.DEFAULT_LAYOUT, domains = {}, errors = {} })
   noctalia.state.set(STATE_CARDS, cards)
   noctalia.state.set(STATE_SUMMARY, countStates())
 end
