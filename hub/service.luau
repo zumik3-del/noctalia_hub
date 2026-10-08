@@ -16,16 +16,29 @@
 -- The extension is part of the path, not a detail: Noctalia's module loader
 -- refuses a require that is not relative and does not end in .luau, and the
 -- failure surfaces as "call to 'chunk' failed" with no mention of the module.
+local Util = require("./util.luau")
 local Config = require("./config.luau")
 local Pipeline = require("./pipeline.luau")
 
-noctalia.setUpdateInterval(1000)
+--- One tick per second, the host's only timer for a service entry. Nothing in
+--- the collector moves faster: polling is on per-card intervals, staleness is
+--- computed from the same stamp, and the config watch stats two files. A shorter
+--- tick would be a clock nobody reads — the one on screen is drawn from the
+--- panel's own second tick, not from this.
+local TICK_INTERVAL_MS = 1000
+
+noctalia.setUpdateInterval(TICK_INTERVAL_MS)
 
 local STATE_CONFIG = "hub.config"
 local STATE_CARDS = "hub.cards"
 local STATE_SUMMARY = "hub.summary"
 local STATE_FATAL = "hub.fatal"
 local STATE_CMD = "hub.cmd"
+
+--- "There is no reading here." The panel draws the same glyph where a card has
+--- no text yet, so it is the shared one in util.luau rather than a collector
+--- decision.
+local NO_VALUE = Util.NO_VALUE
 
 --- doc         the validated model from config.luau, nil until it loads
 --- cards       cardId -> runtime record
@@ -258,7 +271,7 @@ local function applyReading(card, record, raw, err)
     record.error = err
     record.state = "down"
     if record.lastGoodAtMs == nil then
-      record.text = "—"
+      record.text = NO_VALUE
     end
     return
   end
@@ -272,7 +285,7 @@ local function applyReading(card, record, raw, err)
     record.error = reading.error
     record.state = "down"
     if record.lastGoodAtMs == nil then
-      record.text = "???"
+      record.text = Pipeline.NO_READING_TEXT
     end
     return
   end

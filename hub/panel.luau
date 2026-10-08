@@ -76,6 +76,24 @@ end
 local SECONDARY = "on_surface_variant"
 local DIMMED = "on_surface_variant/0.6"
 
+--- Distance between the header row and the tab strip. Chrome, not content: it
+--- stays put while the density below it scales.
+local TAB_STRIP_GAP = 6
+
+--- Distance between the tabs themselves. Tighter than the strip's own gap: a tab
+--- strip is one control, and its parts belong together.
+local TAB_GAP = 3
+
+--- The header's type scale in one place. The header is one size, not a scale: a
+--- glyph leads its line by a step, the panel name leads the text by more, and
+--- every secondary line sits a step below the base. They are separate numbers
+--- because they are separate distances — a panel name is not the same step as a
+--- dash — and they are named because eight copies of `size + 1` is eight places
+--- to change one decision.
+local HEADER_STEP = 1         -- a glyph above its line, a secondary line below
+local HEADER_TITLE_STEP = 2   -- the panel name above the base size
+local HEADER_GLYPH_STEP = 3   -- the gauge above the line it leads
+
 --- Density is a layout decision. A 4K screen with few zones needs the taller row
 --- more than it needs a bigger number. `compact` is the instrument-panel default;
 --- `standard` and `comfortable` trade scrolling for legibility.
@@ -125,17 +143,29 @@ end
 
 --- A card's fill is one of three theme states, never a colour. `tinted` and
 --- `solid` are palette roles with alpha, resolved live against the active theme.
+---
+--- The three levels are named because they are a scale, not three unrelated
+--- strings: a card body sits below its hover highlight, which sits one step
+--- above it. Naming them is what stops a hover that is *dimmer* than the card
+--- behind it.
+local FILL_SOLID = "surface/0.68"
+local FILL_TINTED = "surface_variant/0.38"
+local FILL_HOVER = "surface_variant/0.62"
+
+local BORDER_HIDDEN = "outline/0"
+local BORDER_SUBTLE = "outline/0.6"
+
 local function cardFill()
   local mode = layoutConf().cardBackground or "tinted"
   if mode == "transparent" then return "transparent" end
-  if mode == "solid" then return "surface/0.68" end
-  return "surface_variant/0.38"
+  if mode == "solid" then return FILL_SOLID end
+  return FILL_TINTED
 end
 
 --- The hover highlight. One step brighter than `tinted`, still a palette role, so
 --- the theme keeps control of the actual colour (docs/04 §1).
 local function hoverFill()
-  return "surface_variant/0.62"
+  return FILL_HOVER
 end
 
 --- border, borderWidth. A hovered card claims the accent border only when the
@@ -144,10 +174,10 @@ end
 local function cardBorder(active)
   local mode = layoutConf().cardBorder or "subtle"
   local hover = layoutConf().hoverEffect or "background"
-  if mode == "none" then return "outline/0", 0 end
+  if mode == "none" then return BORDER_HIDDEN, 0 end
   if active and hover == "border" then return "primary", 1 end
   if mode == "accent" then return "primary", 1 end
-  return "outline/0.6", 1
+  return BORDER_SUBTLE, 1
 end
 
 local function clockPattern()
@@ -163,15 +193,15 @@ end
 --- can be trusted is part of trusting it, not debug output (docs/04 §6).
 local function renderStatusLine(size)
   if summary == nil then
-    return ui.label({ text = noctalia.tr("header.loading"), fontSize = size - 1, color = DIMMED, maxLines = 1 })
+    return ui.label({ text = noctalia.tr("header.loading"), fontSize = size - HEADER_STEP, color = DIMMED, maxLines = 1 })
   end
 
   local broken = summary.errors > 0
   local warned = (summary.warn or 0) > 0
 
   local children = {
-    ui.glyph({ name = broken and "alert-triangle" or "circle-check", size = size + 1, color = broken and "error" or "primary" }),
-    Visual.glyphLabel({ text = noctalia.tr("header.cards", { n = summary.total }), fontSize = size - 1, color = broken and "error" or SECONDARY, maxLines = 1 }),
+    ui.glyph({ name = broken and "alert-triangle" or "circle-check", size = size + HEADER_STEP, color = broken and "error" or "primary" }),
+    Visual.glyphLabel({ text = noctalia.tr("header.cards", { n = summary.total }), fontSize = size - HEADER_STEP, color = broken and "error" or SECONDARY, maxLines = 1 }),
   }
 
   -- Warnings ride their own label so the count can be yellow without dragging
@@ -179,11 +209,11 @@ local function renderStatusLine(size)
   -- one, gathered on the header line (D28). Errors, when they exist, follow in
   -- red — a real failure is not the same attention as a pending package.
   if warned then
-    children[#children + 1] = Visual.glyphLabel({ text = "· " .. noctalia.tr("header.warn", { n = summary.warn }), fontSize = size - 1, color = Visual.STATE_ROLES.warn.color, maxLines = 1 })
+    children[#children + 1] = Visual.glyphLabel({ text = "· " .. noctalia.tr("header.warn", { n = summary.warn }), fontSize = size - HEADER_STEP, color = Visual.STATE_ROLES.warn.color, maxLines = 1 })
   end
 
   if broken then
-    children[#children + 1] = Visual.glyphLabel({ text = "· " .. noctalia.tr("header.errors", { n = summary.errors }), fontSize = size - 1, color = "error", maxLines = 1 })
+    children[#children + 1] = Visual.glyphLabel({ text = "· " .. noctalia.tr("header.errors", { n = summary.errors }), fontSize = size - HEADER_STEP, color = "error", maxLines = 1 })
   end
 
   return ui.row({ gap = 4, align = "center" }, children)
@@ -221,7 +251,7 @@ local function renderTabs(size)
     end
   end
 
-  return ui.row({ gap = 3, align = "center" }, children)
+  return ui.row({ gap = TAB_GAP, align = "center" }, children)
 end
 
 --- The active tab can outlive the domain it named — a config edit removes or
@@ -241,10 +271,10 @@ end
 
 local function renderHeader(size, zonePadding)
   local left = {
-    ui.glyph({ name = "gauge", size = size + 3, color = "primary" }),
+    ui.glyph({ name = "gauge", size = size + HEADER_GLYPH_STEP, color = "primary" }),
     Visual.glyphLabel({
       text = string.upper(noctalia.tr("panel.name")),
-      fontSize = size + 2,
+      fontSize = size + HEADER_TITLE_STEP,
       fontWeight = "bold",
       color = "primary",
       maxLines = 1,
@@ -258,7 +288,7 @@ local function renderHeader(size, zonePadding)
   -- belongs on the collector's side of the boundary (docs/05-architecture.md).
   local right = {
     ui.glyph({ name = "clock", size = size, color = DIMMED }),
-    Visual.glyphLabel({ text = clock, fontSize = size - 1, color = SECONDARY, maxLines = 1 }),
+    Visual.glyphLabel({ text = clock, fontSize = size - HEADER_STEP, color = SECONDARY, maxLines = 1 }),
     ui.spacer({ width = zonePadding }),
     ui.button({
       glyph = "refresh",
@@ -285,7 +315,9 @@ local function renderHeader(size, zonePadding)
       ui.row({ gap = 4, align = "center" }, left),
       ui.row({ gap = 4, align = "center" }, right),
     }),
-    ui.spacer({ height = 6 }),
+    -- The strip sits under the header row with a fixed gap: it is chrome, not
+    -- content, and it does not scale with the density of the cards below it.
+    ui.spacer({ height = TAB_STRIP_GAP }),
     renderTabs(size),
   })
 end
@@ -293,22 +325,30 @@ end
 --- The one case where the panel does not render zones at all: a config that could
 --- not be read leaves nothing to draw, and an empty instrument panel would look
 --- exactly like "everything is fine" (docs/06-failure-modes.md).
+---
+--- The glyph is a fixed size because the screen is empty anyway — there is no
+--- text to be relative to — and the reason is capped rather than clipped, so a
+--- long yq error still shows its first lines instead of a truncated one.
+local FATAL_GLYPH_SIZE = 28
+local FATAL_MAX_LINES = 6
+local FATAL_TITLE_STEP = 3
+
 local function renderFatal(size, zonePadding)
   return ui.column({ gap = size, padding = zonePadding * 2, justify = "center" }, {
-    ui.glyph({ name = "file-alert", size = 28, color = "error" }),
+    ui.glyph({ name = "file-alert", size = FATAL_GLYPH_SIZE, color = "error" }),
     ui.label({
       text = noctalia.tr("fatal.title"),
-      fontSize = size + 3,
+      fontSize = size + FATAL_TITLE_STEP,
       fontWeight = "bold",
       color = "error",
     }),
-    ui.label({ text = fatal, fontSize = size, color = SECONDARY, maxLines = 6 }),
+    ui.label({ text = fatal, fontSize = size, color = SECONDARY, maxLines = FATAL_MAX_LINES }),
   })
 end
 
 local function renderLoading(size, zonePadding)
   return ui.column({ gap = size, padding = zonePadding * 2, justify = "center", align = "center" }, {
-    ui.label({ text = noctalia.tr("header.loading"), fontSize = size + 1, color = DIMMED }),
+    ui.label({ text = noctalia.tr("header.loading"), fontSize = size + HEADER_STEP, color = DIMMED }),
   })
 end
 

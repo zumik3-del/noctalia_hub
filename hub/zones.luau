@@ -17,6 +17,10 @@ local Visual = require("./visual.luau")
 
 local M = {}
 
+--- The gap between one config error and the next. A list of problems reads as a
+--- list, not as one paragraph, and this is the whole of its leading.
+local ERROR_ROW_GAP = 4
+
 --- Problems in this zone, for the header count. Only real problems: a `pending`
 --- card is an absence of one, and counting it would make every freshly loaded
 --- panel look broken. Each card counts at most once.
@@ -140,7 +144,7 @@ function M.renderConfigErrors(view)
     renderZoneHeader(view, "file-alert", noctalia.tr("zone.config"), #errors, size),
   }
   for _, err in ipairs(errors) do
-    children[#children + 1] = ui.spacer({ height = 4 })
+    children[#children + 1] = ui.spacer({ height = ERROR_ROW_GAP })
     children[#children + 1] = ui.label({
       text = err.path .. " — " .. err.message,
       fontSize = size - 1,

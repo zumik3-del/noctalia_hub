@@ -26,7 +26,24 @@
   already moved past. Handing over functions is what keeps that impossible.
 ]]
 
+local Util = require("./util.luau")
 local Visual = require("./visual.luau")
+
+--- "There is no reading here." The collector publishes it for a card that has
+--- never answered and the panel draws it where a card has no text yet, so the
+--- glyph is the shared one in util.luau rather than a view decision.
+local NO_VALUE = Util.NO_VALUE
+
+--- The card's own numbers, in one block. Every one of them is relative to the
+--- font size, so a density or a `font_scale` scales the whole shape; what they
+--- fix is the *relationship* — how much bigger the badge is than the line it
+--- sits beside, and how the two lines of type are ordered.
+local BADGE_PADDING = 17         -- badge edge past the text size
+local BADGE_GLYPH_OVERHANG = 5   -- the glyph inside the badge
+local BADGE_MIN_RADIUS = 4       -- a badge at the smallest font still reads round
+local TITLE_STEP = 2             -- the title leads its line
+local VALUE_STEP = 1             -- the value sits just under it
+local TITLE_GAP = 3              -- between the title and its second line
 
 local M = {}
 
@@ -154,16 +171,16 @@ local function renderLinkCard(view, card, index)
   local active = Visual.isHovered(key)
   local border, borderWidth = view.border(active)
 
-  local badge = size + 17
+  local badge = size + BADGE_PADDING
   local leading = ui.column({
     width = badge,
     height = badge,
-    radius = math.max(4, math.floor(badge / 4)),
+    radius = math.max(BADGE_MIN_RADIUS, math.floor(badge / 4)),
     fill = "primary/0.12",
     align = "center",
     justify = "center",
   }, {
-    ui.glyph({ name = card.glyph or "link", size = size + 5, color = "primary" }),
+    ui.glyph({ name = card.glyph or "link", size = size + BADGE_GLYPH_OVERHANG, color = "primary" }),
   })
 
   -- The title sits in the flexible column so the description, added after it,
@@ -172,9 +189,9 @@ local function renderLinkCard(view, card, index)
     leading,
     ui.column({ flexGrow = 1 }, {
       ui.label({
-        text = card.title or card.id or "—",
+        text = card.title or card.id or NO_VALUE,
         fontWeight = "bold",
-        fontSize = size + 2,
+        fontSize = size + TITLE_STEP,
         color = "on_surface",
         maxLines = 1,
       }),
@@ -252,29 +269,29 @@ function M.renderCard(view, card, record, index)
   local state = record.state or "pending"
   local role = Visual.STATE_ROLES[state] or Visual.STATE_ROLES.pending
   local stateColor = role.color
-  local value = (record.text ~= nil and record.text ~= "") and record.text or "—"
+  local value = (record.text ~= nil and record.text ~= "") and record.text or NO_VALUE
 
-  local badge = size + 17
+  local badge = size + BADGE_PADDING
   local leading = ui.column({
     width = badge,
     height = badge,
-    radius = math.max(4, math.floor(badge / 4)),
+    radius = math.max(BADGE_MIN_RADIUS, math.floor(badge / 4)),
     fill = "primary/0.12",
     align = "center",
     justify = "center",
   }, {
     ui.glyph({
       name = card.glyph or Visual.KIND_GLYPH[card.kind] or "activity",
-      size = size + 5,
+      size = size + BADGE_GLYPH_OVERHANG,
       color = "primary",
     }),
   })
 
   local lines = {
     ui.label({
-      text = card.title or card.id or "—",
+      text = card.title or card.id or NO_VALUE,
       fontWeight = "bold",
-      fontSize = size + 2,
+      fontSize = size + TITLE_STEP,
       color = "on_surface",
       maxLines = 2,
     }),
@@ -305,7 +322,7 @@ function M.renderCard(view, card, record, index)
   if card.kind ~= "status" then
     trailing[#trailing + 1] = ui.label({
       text = value,
-      fontSize = size - 1,
+      fontSize = size - VALUE_STEP,
       textAlign = "end",
       color = stateColor,
       maxLines = 1,
@@ -348,7 +365,7 @@ function M.renderCard(view, card, record, index)
 
   local children = {
     leading,
-    ui.column({ flexGrow = 1, gap = 3 }, lines),
+    ui.column({ flexGrow = 1, gap = TITLE_GAP }, lines),
   }
   for _, node in ipairs(trailing) do
     children[#children + 1] = node

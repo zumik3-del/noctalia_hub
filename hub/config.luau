@@ -733,6 +733,11 @@ end
 
 -- ── build ────────────────────────────────────────────────────────────────────
 
+--- Where a zone count stops being a reading exercise and starts being a layout
+--- problem. A warning only: docs/07-decisions.md leaves the number unenforced
+--- until there is a render measurement to justify a real cap.
+local CARD_COUNT_WARNING = 100
+
 --- Pure: takes the two decoded YAML documents and returns the data model.
 --- Never raises; every problem becomes an entry in `errors`, attached to the
 --- domain or card that caused it so the panel can render everything else.
@@ -805,7 +810,7 @@ function M.build(doc, secrets)
   for _, domain in ipairs(domains) do
     total = total + #domain.cards
   end
-  if total > 100 then
+  if total > CARD_COUNT_WARNING then
     sink.add("domains", "warning: " .. total .. " cards — consider more zones (no cap is enforced until there is a render measurement)")
   end
 
@@ -853,6 +858,12 @@ function M.stamp()
   return table.concat(parts, "|")
 end
 
+--- How long yq may take before the read gives up on it. The converter is a
+--- subprocess on the config path, and a hung one would hold the collector's one
+--- in-flight read open forever: this is what turns that into a reason the panel
+--- can show instead.
+local YQ_TIMEOUT_MS = 10000
+
 --- yq converts YAML to JSON once per file change and the JSON can be cached in
 --- the plugin data dir, so the price of YAML is paid at load rather than per
 --- render (D2). The cache is keyed on mtime and size, which is what makes a
@@ -899,7 +910,7 @@ local function convertToJson(path, cachePath, done)
       noctalia.writeFile(cachePath, result.stdout)
     end
     done(result.stdout, nil)
-  end, 10000)
+  end, YQ_TIMEOUT_MS)
 
   if not accepted then
     done(nil, "yq could not be started")

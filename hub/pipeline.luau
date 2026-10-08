@@ -36,6 +36,11 @@ local function numberText(v)
   return tostring(v)
 end
 
+--- What the panel draws when a value has no text of its own. Never a zero and
+--- never an empty string: a reading that did not arrive has to stay visibly
+--- missing, or the panel starts inventing facts (docs/06-failure-modes.md).
+M.NO_READING_TEXT = "???"
+
 local function typeName(v)
   local t = type(v)
   if t == "table" then
@@ -63,7 +68,7 @@ local function scalarText(v)
   if t == "table" then
     return "<" .. tostring(#v) .. " items>"
   end
-  return "???"
+  return M.NO_READING_TEXT
 end
 
 --- `{name}` substitution. An unknown placeholder is left in place on purpose:
@@ -182,7 +187,7 @@ local function evaluate(card, raw)
   if state == nil then
     reading.state = "down"
     reading.error = reason
-    reading.text = "???"
+    reading.text = M.NO_READING_TEXT
     return reading
   end
 
