@@ -30,10 +30,12 @@ local summary = nil
 local fatal = ""
 local clock = ""
 
---- `all` is the instrument-panel view (every zone stacked); a domain id is a tab
---- holding one zone. The default is `all` so the at-a-glance panel survives the
---- tab strip rather than being replaced by it (D24).
-local activeTab = "all"
+--- The landing tab, and the only tab that holds no zone. It is stored as the
+--- empty string because a domain id is never empty, so a zone the author happens
+--- to call `overview` keeps its own tab instead of colliding with this one.
+--- Overview is the custom dashboard and is deliberately blank in this build.
+local OVERVIEW = ""
+local activeTab = OVERVIEW
 
 --- The card block under the pointer, by key. Hover is a render-time decision, so
 --- it lives with the other view state and never crosses to the collector.
@@ -195,40 +197,55 @@ end
 --- can be read from, so this is where a card with no `id` still reports itself.
 local function cardSecondLine(card, record, size)
   if record.configError ~= nil then
-    return ui.label({ text = record.configError, fontSize = size - 1, color = "error", maxLines = 2 })
+    return ui.label({ text = record.configError, fontSize = size, color = "error", maxLines = 2 })
   end
 
   if #(card.errors or {}) > 0 then
-    return ui.label({ text = card.errors[1].message, fontSize = size - 1, color = "error", maxLines = 2 })
+    return ui.label({ text = card.errors[1].message, fontSize = size, color = "error", maxLines = 2 })
   end
 
   if record.error ~= nil then
     return ui.label({
       text = record.error,
-      fontSize = size - 1,
+      fontSize = size,
       color = STATE_COLOR[record.state] or SECONDARY,
       maxLines = 2,
     })
   end
 
+  -- The description is the ordinary second line: what the thing is. An error or a
+  -- frozen reading outranks it, because a card that only says what it measures,
+  -- while its value stopped moving, is the panel lying (docs/06-failure-modes.md).
+  if type(card.description) == "string" and card.description ~= "" then
+    return ui.label({ text = card.description, fontSize = size, color = SECONDARY, maxLines = 2 })
+  end
+
   if record.state == "stale" or record.attempts > 0 then
     local text = ageLine(record)
     if text ~= nil then
-      return ui.label({ text = text, fontSize = size - 1, color = DIMMED, maxLines = 1 })
+      return ui.label({ text = text, fontSize = size, color = DIMMED, maxLines = 1 })
     end
   end
 
   return nil
 end
 
---- One card, drawn as a block: rounded, filled, optionally bordered, and lighter
---- under the pointer. The block is the framework ported from github-kanban; the
---- contents are still the instrument row
+--- One card, drawn as the activity block of github-kanban (D25): a badge on the
+--- left, a two-line column in the middle, and the reading plus its state marker on
+--- the right.
 ---
----     [glyph] title ......... value [status]
+---     ┌──┐  Title                        34%  ●
+---     └──┘  Description
 ---
---- that docs/02-layout.md fixes. The value stays right-aligned: a column of
---- numbers has to read as a scale.
+--- The badge is kanban's avatar slot: hub has no images, so it fills it with the
+--- card's glyph on a tinted rounded square, which is exactly what kanban does for
+--- the rows that have no avatar.
+---
+--- The second line is the description; an error or a stale reading takes its place
+--- rather than sitting under it, so a failure is never lost to the layout
+--- (docs/06-failure-modes.md). The reading stays on the trailing edge: a column of
+--- numbers has to read as a scale, and that does not change because the row grew a
+--- second line.
 ---
 --- `sizes` is the density table, not a font size: a card needs both a font size
 --- and padding, and passing two numbers around invites swapping them. `index` is
@@ -246,54 +263,50 @@ local function renderCard(card, record, sizes, index)
   local active = hovered == key
   local border, borderWidth = cardBorder(active)
 
-  -- The card's own line is a row, and it has to be: the five children below are a
-  -- horizontal arrangement by construction, and the spacer with flexGrow exists to
-  -- push the value to the trailing edge — which only means anything in a row.
-  local row = ui.row({ gap = 6, align = "center" }, {
+  local state = record.state or "pending"
+  local stateColor = STATE_COLOR[state] or SECONDARY
+  local value = (record.text ~= nil and record.text ~= "") and record.text or "—"
+
+  local badge = size + 17
+  local leading = ui.column({
+    width = badge,
+    height = badge,
+    radius = math.max(4, math.floor(badge / 4)),
+    fill = "primary/0.12",
+    align = "center",
+    justify = "center",
+  }, {
     ui.glyph({
       name = card.glyph or KIND_GLYPH[card.kind] or "activity",
-      size = size + 2,
-      color = SECONDARY,
-    }),
-    glyphLabel({
-      text = card.title or card.id or "—",
-      fontSize = size,
-      color = "on_surface",
-      maxLines = 1,
-    }),
-    ui.spacer({ flexGrow = 1 }),
-    glyphLabel({
-      text = (record.text ~= nil and record.text ~= "") and record.text or "—",
-      fontSize = size,
-      fontWeight = "medium",
-      textAlign = "end",
-      color = STATE_COLOR[record.state] or SECONDARY,
-      maxLines = 1,
-    }),
-    ui.glyph({
-      name = STATE_GLYPH[record.state] or STATE_GLYPH.pending,
-      size = size,
-      color = STATE_COLOR[record.state] or SECONDARY,
+      size = size + 5,
+      color = "primary",
     }),
   })
 
-  local children = { row }
-
+  local lines = {
+    ui.label({
+      text = card.title or card.id or "—",
+      fontWeight = "bold",
+      fontSize = size + 2,
+      color = "on_surface",
+      maxLines = 2,
+    }),
+  }
   local second = cardSecondLine(card, record, size)
   if second ~= nil then
-    children[#children + 1] = ui.spacer({ height = 2 })
-    children[#children + 1] = second
+    lines[#lines + 1] = second
   end
 
-  return ui.column({
+  return ui.row({
     key = key,
-    gap = 0,
+    gap = sizes.cardPadH,
     paddingH = sizes.cardPadH,
     paddingV = sizes.cardPadV,
     radius = cardRadius(),
     fill = active and hoverFill() or cardFill(),
     border = border,
     borderWidth = borderWidth,
+    align = "center",
     onHover = function(value)
       local nextHovered = value == "true" and key or nil
       if nextHovered ~= hovered then
@@ -301,7 +314,18 @@ local function renderCard(card, record, sizes, index)
         render()
       end
     end,
-  }, children)
+  }, {
+    leading,
+    ui.column({ flexGrow = 1, gap = 3 }, lines),
+    ui.label({
+      text = value,
+      fontSize = size - 1,
+      textAlign = "end",
+      color = stateColor,
+      maxLines = 1,
+    }),
+    ui.glyph({ name = STATE_GLYPH[state] or STATE_GLYPH.pending, size = size, color = stateColor }),
+  })
 end
 
 -- ── zones ────────────────────────────────────────────────────────────────────
@@ -440,9 +464,9 @@ local function renderStatusLine(size)
 end
 
 --- The zone names moved out of the header line and into this strip: one button
---- per domain, plus `ALL`, which is the whole stack. Selected buttons take the
---- primary variant, the rest are ghost — the same tab vocabulary as
---- github-kanban's dashboard strip.
+--- per domain, plus `overview`, which is the custom dashboard and holds no zone.
+--- Selected buttons take the primary variant, the rest are ghost — the same tab
+--- vocabulary as github-kanban's dashboard strip.
 local function renderTabs(size)
   local children = {}
 
@@ -462,7 +486,7 @@ local function renderTabs(size)
     })
   end
 
-  tab("all", noctalia.tr("panel.tab_all"), "layout-dashboard")
+  tab(OVERVIEW, noctalia.tr("panel.tab_overview"), "layout-dashboard")
   for _, domain in ipairs(doc.domains or {}) do
     -- The pinned footer is background, not a destination: it is always visible
     -- and needs no tab.
@@ -475,10 +499,10 @@ local function renderTabs(size)
 end
 
 --- The active tab can outlive the domain it named — a config edit removes or
---- renames a zone. Falling back to `all` is the honest recovery: the panel keeps
---- showing every zone instead of an empty body.
+--- renames a zone. Falling back to `overview` is the honest recovery: the panel
+--- keeps showing its landing tab instead of an empty body under a dead name.
 local function ensureTab()
-  if activeTab == "all" then
+  if activeTab == OVERVIEW then
     return
   end
   for _, domain in ipairs(doc.domains or {}) do
@@ -486,7 +510,7 @@ local function ensureTab()
       return
     end
   end
-  activeTab = "all"
+  activeTab = OVERVIEW
 end
 
 local function renderHeader(size, zonePadding)
@@ -591,15 +615,20 @@ function render()
 
   for _, domain in ipairs(doc.domains or {}) do
     -- `pin: bottom` takes a zone out of the scrolling flow: it is background, and
-    -- it must not push content around as its numbers change (D6).
+    -- it must not push content around as its numbers change (D6). It is the one
+    -- zone that draws on every tab, `overview` included.
     if domain.pin == "bottom" then
       footer = renderZone(domain, sizes, sizes.rowGap, zonePadding)
-    elseif activeTab == "all" or activeTab == domain.id then
+    elseif activeTab == domain.id then
       scrolling[#scrolling + 1] = renderZone(domain, sizes, sizes.rowGap, zonePadding)
     end
   end
 
-  if #(scrolling) == 0 then
+  -- `overview` is the custom dashboard and is blank in this build, so it is the
+  -- one tab where an empty body is the intended state and not a missing config.
+  -- The config-errors block above still draws there: a broken config must never
+  -- hide behind a blank tab (docs/06-failure-modes.md).
+  if #(scrolling) == 0 and activeTab ~= OVERVIEW then
     scrolling[1] = ui.column({ gap = sizes.rowGap, padding = zonePadding }, {
       ui.label({ text = noctalia.tr("zone.no_domains"), fontSize = size, color = DIMMED, maxLines = 2 }),
     })
@@ -608,8 +637,24 @@ function render()
   local main = {
     renderHeader(size, zonePadding),
     ui.separator({ thickness = 1, color = DIMMED }),
-    ui.scroll({ flexGrow = 1 }, {
-      ui.column({ gap = sizes.zoneGap }, scrolling),
+    -- Keyed by tab, the way k8s-status does it: when a tab's body changes from
+    -- empty to full, an unkeyed scroll keeps the previous (empty) layout and the
+    -- new zone never appears until the panel is reopened. A fresh key on every
+    -- switch forces the relayout. The inner column stretches to the viewport, so a
+    -- short zone fills the panel, and grows past it — the scroll then takes over.
+    ui.scroll({
+      key = "hub:scroll:" .. activeTab,
+      flexGrow = 1,
+      gap = sizes.zoneGap,
+      align = "stretch",
+    }, {
+      ui.column({
+        key = "hub:items:" .. activeTab,
+        flexGrow = 1,
+        justify = "start",
+        align = "stretch",
+        gap = sizes.zoneGap,
+      }, scrolling),
     }),
   }
 

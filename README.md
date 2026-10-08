@@ -1,8 +1,8 @@
 # noctalia_hub
 
 An instrument panel for [Noctalia](https://noctalia.dev) v5 — a control centre
-showing links, service status, metrics and release feeds on the left half of the
-monitor.
+showing links, service status, metrics and release feeds, opened beside the bar
+widget.
 
 > **Status: skeleton.** The plugin exists and opens; only `source: static` fetches.
 > `http`, `command`, `stream` and `rss` are validated and report themselves as
@@ -12,9 +12,9 @@ monitor.
 
 ## Idea
 
-The panel opens on the left half of the monitor and reads like a spacecraft
-instrument panel: zones grouped by domain, one instrument per row, colour meaning
-state rather than decoration.
+The panel opens from the bar and reads like a spacecraft instrument panel: zones
+grouped by domain, one instrument per row, colour meaning state rather than
+decoration.
 
 Where existing plugins cover a single concern — `bookmarks` is a link list,
 `systempulse` is metrics, `rss-feeds` is feeds — this puts all of it on one

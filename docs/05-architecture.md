@@ -6,7 +6,7 @@
 hub/
 ├── plugin.toml          # manifest: plugin_api 32, dependencies, settings
 ├── service.luau         # background: collect data → noctalia.state
-├── panel.luau           # full-screen panel, pure subscriber
+├── panel.luau           # panel, pure subscriber
 ├── widget.luau          # compact bar summary
 ├── config.luau          # load and validate hub.yaml
 ├── pipeline.luau        # fetch → extract → map → format
@@ -225,7 +225,7 @@ plugin_api = 32
 author = "zumik3-del"
 license = "MIT"
 icon = "gauge"
-description = "Instrument panel on the left half of the monitor: service status, metrics, releases and links from one YAML file."
+description = "Instrument panel: service status, metrics, releases and links from one YAML file."
 tags = ["bar", "panel", "service", "indicator", "utility", "system"]
 dependencies = ["yq"]
 
@@ -246,8 +246,8 @@ entry = "widget.luau"
 [[panel]]
 id = "panel"
 entry = "panel.luau"
-width = 960
-height = 1080
+width = 860
+height = 620
 placement = "attached"
 position = "auto"
 open_near_click = true
@@ -266,10 +266,10 @@ that opened it, and `position = "auto"` lets the host choose the side from the
 click. `dismiss_on_outside_click = true` makes it a popover; `esc` still closes it.
 
 `width` and `height` take a number of pixels or the word `"fill"` — nothing
-between. There is no percentage and no `"half"`, so "half the screen" is two
-numbers that have to be right for the display in question: 960x1080 is the left
-half of the 1920x1080 panel this was written on, and a different monitor means
-editing them. `"fill"` is the only relative form, and it means the whole screen.
+between. There is no percentage and no `"half"`. 860x620 is github-kanban's panel
+size, taken as-is once the panel became a popover beside the widget rather than a
+measured screen half; a different size means editing both numbers. `"fill"` is the
+only relative form, and it means the whole screen.
 
 `position` takes `auto`, `center`, `center_left`, `center_right`, `top_left`,
 `top_right`, `bottom_left`, `bottom_right` — **with underscores**. `auto` is the

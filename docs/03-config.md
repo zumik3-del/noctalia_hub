@@ -205,16 +205,16 @@ presentation field on any card, not a kind; a plain string reading is `status`.
 A single line saying what the thing is, for when you cannot tell from the name.
 `Router · Keenetic gateway` is ambiguous; `Gateway and routing` is not.
 
-**It shows on the selected card and on expanded rows, nowhere else.** Eighteen
-monitored services each carrying a description is eighteen extra lines in a zone —
-and the zone grows taller than the screen, which is the failure this project is
-built to avoid. The description is for the moment you are already looking at one
-card, which is exactly when a selected card is.
+**It is the second line of its card.** The card is github-kanban's activity block
+([D25](07-decisions.md)): title on the first line, description on the second, the
+reading and its state marker on the trailing edge. A card with no description is
+one line tall.
 
-Always-on descriptions are deliberately **not** supported. A `show_descriptions`
-flag on the domain was considered and rejected ([D18](07-decisions.md)): a zone that
-wants eighteen always-on lines has too many cards in it, and the fix is to split the
-zone, not to add a switch. The description stays a selection-time detail.
+An error or a stale reading takes the second line's place rather than sitting
+under it, so a failure is never hidden by the layout
+([06](06-failure-modes.md)). This reverses D18's "selected card only": that rule
+was written when the card carried no second line of its own, and the description
+now shares it with the failure text instead of competing with it.
 
 ### Data
 

@@ -161,47 +161,6 @@ domains:
         hidden: true
         source: { type: static, value: "—" }
 
-
-  # ── System ─────────────────────────────────────────────────────────────────
-  # `pin: bottom` takes the zone out of the scrolling flow: it is background, and
-  # it must not push content around as its numbers change (D6). At most one
-  # domain may pin.
-  - id: system
-    title: System
-    glyph: cpu
-    pin: bottom
-    interval_sec: 15
-    stale_after_sec: 60
-
-    cards:
-      - id: cpu
-        title: CPU
-        glyph: cpu
-        kind: metric
-        source: { type: static, value: 34 }
-        format: "{n}%"
-        thresholds: { warn: 80, critical: 95 }
-        graph: 48
-
-      - id: memory
-        title: MEM
-        glyph: server-2
-        kind: metric
-        source: { type: static, value: 48 }
-        format: "{n}%"
-        thresholds: { warn: 85, critical: 95 }
-        graph: 48
-
-      - id: disk
-        title: Disk /
-        glyph: folder
-        kind: metric
-        source: { type: static, value: 71 }
-        format: "{n}%"
-        thresholds: { warn: 85, critical: 93 }
-        graph: 48
-
-
 # Secrets are not needed here. When you move to config/hub.example.yaml, put them
 # in hub.secrets.yaml (mode 0600) and reference them as "${name}" — quoted inside
 # a flow mapping, or YAML reads the brace as a nested mapping. See docs/03-config.md.

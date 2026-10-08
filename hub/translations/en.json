@@ -11,7 +11,7 @@
     "close": "Close",
     "name": "hub",
     "refresh": "Refresh",
-    "tab_all": "All"
+    "tab_overview": "Overview"
   },
   "settings": {
     "compact": {

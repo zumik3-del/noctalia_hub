@@ -97,20 +97,33 @@ and the palette picks the **colour**. A lighter hover fill is a palette role wit
 alpha, not a literal colour, so the theme still owns the result. Hover is
 presentation only: it never changes a reading or a state.
 
+Inside the block the layout is github-kanban's activity row ([D25](07-decisions.md)):
+
+```
+┌──┐  Gateway                       running  ●
+└──┘  Keenetic, gateway and routing
+```
+
+A glyph badge leads, a two-line column carries the title and the description, and
+the reading plus its state marker sit on the trailing edge. The title is
+`on_surface` bold, the description `on_surface_variant`, and only the value and
+the marker carry a signal colour (§1–2): the block never recolours the title to
+match the state.
+
 The header is a menu, also from github-kanban:
 
 ```
 ⌂ HUB   ✓ 14 cards            ◷ 10:14  ⟳  ✕
-ALL   SERVICES   RELEASES   LINKS
+OVERVIEW   SERVICES   RELEASES   LINKS
 ```
 
 - left: name and the always-visible trust line (`✓ 24 cards · 2 errors`, §6)
 - right: clock, a refresh button and a close button
-- below it, one tab per zone plus `ALL`
+- below it, `OVERVIEW` plus one tab per zone
 
-`ALL` is the instrument-panel view — every zone stacked — and is the default, so
-the tab strip adds a menu without taking away the at-a-glance panel. A pinned
-`pin: bottom` zone is background and gets no tab; it stays in the footer.
+`OVERVIEW` is the landing tab and is reserved for the custom dashboard — blank in
+this build. Each other tab shows one zone. A pinned `pin: bottom` zone is
+background and gets no tab; it stays in the footer.
 
 ## Rejected
 

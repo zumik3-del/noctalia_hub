@@ -6,7 +6,7 @@ author = "zumik3-del"
 license = "MIT"
 icon = "gauge"
 tags = ["bar", "panel", "service", "indicator", "utility", "system"]
-description = "Full-screen instrument panel: service status, metrics, releases and links from one YAML file."
+description = "Instrument panel: service status, metrics, releases and links from one YAML file."
 dependencies = ["yq"]
 
 # Skeleton build: config.luau loads and validates hub.yaml, service.luau publishes
@@ -43,11 +43,14 @@ entry = "widget.luau"
 # capture_keys lists only what the panel answers today. Capturing a key it cannot
 # honour takes that key away from every other surface, so "/" and "?" are added
 # when the search and the shortcut overlay exist.
+#
+# 860x620 is github-kanban's panel size. The panel is a popover beside the widget
+# now, not a screen half, so it takes the shipped size rather than a measured one.
 [[panel]]
 id = "panel"
 entry = "panel.luau"
-width = 960
-height = 1080
+width = 860
+height = 620
 placement = "attached"
 position = "auto"
 open_near_click = true

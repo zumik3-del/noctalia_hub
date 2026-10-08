@@ -41,6 +41,12 @@ anyway and a stale scroll position would be wrong more often than helpful.
   the panel holds focus, and the keyboard model stops being reliable exactly where
   it matters: inside the search field.
 
+**Superseded in part.** D24 moved the panel to `placement = "attached"` beside the
+widget, and D25 set the size to github-kanban's 860x620 and turned on
+`dismiss_on_outside_click`. The `persistent`-versus-exclusive-focus reasoning above
+still holds — the panel is not persistent, and exclusive focus is still why. The
+full-screen, `"fill"` and floating clauses no longer describe the panel.
+
 ---
 
 ## D2. YAML, not JSON
@@ -467,6 +473,10 @@ and that is deliberate: a domain-level `show_descriptions` was considered and
 rejected (see the resolved questions below). A zone that feels it needs one has too
 many cards in it; the fix is to split the zone, not to add a toggle.
 
+**Superseded in part.** D25 makes the description the second line of *every* card.
+The rejection of a `show_descriptions` switch stands on its own: there is no switch
+because the line is not optional, it is the card's own.
+
 ---
 
 ## D19. Many feeds merge into one card, sorted by date
@@ -730,6 +740,50 @@ so it is presentation without an action until step 6. `show_header` and
 `stale_badge` remain accepted, validated and unhonoured; porting the framework
 did not change that.
 
+**Superseded in part.** D25 replaces the first tab: it is `overview`, a blank
+dashboard, not `ALL` with every zone stacked.
+
+---
+
+## D25. The card is github-kanban's activity row; `overview` is the landing tab
+
+**Decision.** Every card draws as github-kanban's activity row: a glyph badge on
+the left, a two-line column (title, then description), and the reading with its
+state marker on the trailing edge. A card with no `description` is one line tall.
+The first tab is `overview`, reserved for the custom dashboard and deliberately
+blank in this build; each other tab shows exactly one zone. The panel is 860x620,
+github-kanban's size.
+
+**Why.** The activity row is the reading shape: a thing, what it is, and its
+current value, in the order a person reads them. The old single line
+(`[glyph] title ……… value ●`) put the title and the value on one baseline and had
+nowhere for a description, so D18's description needed a selection state that does
+not exist yet. The two-line block gives it a home without a selection model.
+
+**Why `overview` and not `ALL`.** The first tab strip kept `ALL` as the default so
+the at-a-glance panel survived (D24). The author wants a landing tab to grow a
+custom dashboard on, so `overview` takes that slot and stays blank until it does.
+The one-zone-per-domain tabs are unchanged; only the aggregate default is gone.
+
+**Why the description shares the line with failures.** An error or a stale reading
+takes the second line's place instead of stacking under it. Two lines is the
+block's budget; a third would make every failing card taller than a working one and
+the panel would jump as services flap (docs/06-failure-modes.md).
+
+**Rejected.** Always-on descriptions *with* a `show_descriptions` switch — the
+switch was and remains rejected (D18); the line is the card's own now, so there is
+nothing to toggle. Naming the landing tab in `hub.yaml` — it is built in, and the
+panel stores it under the empty string so a zone the author calls `overview`
+cannot collide with it. Copying kanban's avatar *images* — hub has no images, so
+the badge is the glyph on a tinted square, which is kanban's own no-avatar
+fallback.
+
+**Consequence.** D18's "selected card only" is reversed: the description is always
+the second line, so a zone of eighteen described cards is eighteen two-line
+blocks. That is affordable now because a tab holds one zone, not the whole panel.
+Selection, when it lands, has no description left to reveal and can use the row for
+something else.
+
 ---
 
 ## Resolved questions
@@ -755,10 +809,11 @@ surface would duplicate the summary and add a second render path to keep in step
 `desktop_widget.luau` is dropped from the layer list. If the bar widget proves
 insufficient this reopens, with a reason rather than by default.
 
-**No `show_descriptions`.** Descriptions stay selection-only (D18). A zone flag that
-turns eighteen descriptions back on is the height blowup D18 exists to prevent. A
-zone that feels it needs one has too many cards in it, and the fix is to split the
-zone, not to add a switch.
+**No `show_descriptions`.** There was never a flag, and there is none now (D18).
+The description is the second line of every card (D25); a domain-level switch
+would make it optional, which is a toggle over a layout the zone already controls
+by how many cards it holds. A zone with more descriptions than it wants to show is
+a zone to split, not a switch to add.
 
 **`split:` is added for text rows.** See D23. The panel-registry card still stays
 out — it needs a prefix and a suffix strip as well as a split, and two more

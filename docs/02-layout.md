@@ -5,7 +5,7 @@ Chosen: **layout A, "instrument panel"** — zones grouped by domain.
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
 │ ⌂ HUB        ✓ 24 cards · 2 errors         ◷ 14:32:07  ⟳  ✕          │
-│ ALL   PROXMOX   GITHUB   RELEASES                                        │
+│ OVERVIEW   PROXMOX   GITHUB   RELEASES                                   │
 ├────────────────┬──────────────────────────┬──────────────────────────────┤
 │ INFRASTRUCTURE │ RELEASES                  │ WATCHING                     │
 │                │                          │                              │
@@ -13,9 +13,7 @@ Chosen: **layout A, "instrument panel"** — zones grouped by domain.
 │ ▸ proxmox    ● │  ▸ noctalia   5.2.1  –   │  ▸ noctalia-plugins  ○○○●○   │
 │ ▸ grafana    ○ │  ▸ kitty      0.36 ↑2   │  ▸ hub-repo        new PR    │
 │ ▸ uptime   99%│                          │                              │
-├────────────────┴──────────────────────────┴──────────────────────────────┤
-│  CPU ▁▂▃▅▇▆▄▂  34%   MEM ▁▁▂▂▃▃▃▂▂  48%   DISK / ███████░░░  71%  ⏻    │
-└──────────────────────────────────────────────────────────────────────────┘
+└────────────────┴──────────────────────────┴──────────────────────────────┘
 ```
 
 ## Zones flow, they do not sit in a rigid grid
@@ -64,17 +62,24 @@ colours rather than from the arrangement.
 **Header** — glyph, domain title, problem count for that domain. The header is the
 only element present even when the domain is empty.
 
-**Instrument rows** — one per card. Fixed row structure:
+**Instrument rows** — one per card, drawn as github-kanban's activity block
+([D25](07-decisions.md)). Fixed structure:
 
 ```
-[glyph] title .................. value [status]
+┌──┐  Title                      value  ●
+└──┘  Description
 ```
 
-- glyph on the left for identification, scanned with a vertical glance
-- value on the right for the thing you actually came to read
-- status indicator at the end: a coloured dot or an arrow
+- badge on the left: the card's glyph on a tinted rounded square, for
+  identification scanned with a vertical glance
+- title on the first line, bold
+- description on the second line, dimmed; an error or a stale reading takes that
+  line's place rather than sitting under it, so a failure is never lost
+- value and status dot on the trailing edge, for the thing you actually came to
+  read
 
-Right-alignment of values is mandatory: a column of numbers has to read as a scale.
+A card with no `description` is one line tall. Right-alignment of values is
+mandatory: a column of numbers has to read as a scale.
 
 **Empty domain** is not an empty box but a quiet hint offering a ready-made template
 (Proxmox / GitHub / RSS). Lowers the entry barrier and doubles as in-panel
@@ -84,26 +89,29 @@ documentation.
 
 ```
 ⌂ HUB        ✓ 24 cards · 2 errors        ◷ 14:32:07  ⟳  ✕
-ALL   PROXMOX   GITHUB   RELEASES
+OVERVIEW   PROXMOX   GITHUB   RELEASES
 ```
 
 - left: name and the trust line, `✓ 24 cards · 2 errors` — always visible, so you
   know whether the panel can be trusted
 - right: clock, a refresh button and a close button
-- below: a tab strip, `ALL` plus one tab per zone
+- below: a tab strip, `OVERVIEW` plus one tab per zone
 
 The zone list used to sit inline in the header (`PROXMOX · GITHUB · RELEASES`) and
 became the tab strip when the github-kanban menu framework landed
-([D24](07-decisions.md)). `ALL` is the default and is the whole instrument panel;
-each other tab narrows the body to one zone. A `pin: bottom` zone is background,
-so it keeps its place in the footer instead of getting a tab. `esc` and `r` still
-work from the keyboard; `?` opens the shortcut overlay once it exists.
+([D24](07-decisions.md)). `OVERVIEW` is the default and is reserved for the custom
+dashboard — deliberately blank in this build. Each other tab shows one zone. A
+`pin: bottom` zone is background, so it keeps its place in the footer instead of
+getting a tab. `esc` and `r` still work from the keyboard; `?` opens the shortcut
+overlay once it exists.
 
 ## Footer
 
-System metrics (CPU / MEM / DISK) compact, with inline sparklines. A separate
-`system` domain, declared with `pin: bottom`, so it sits outside the scrolling flow
-— it is background, not content.
+A zone may declare `pin: bottom` to sit outside the scrolling flow and stay
+visible. It is background, not content, so its numbers never push the panel around
+(D6), and at most one zone may pin. This build ships no pinned zone — the earlier
+System footer was removed — but the mechanism is part of the schema
+([03](03-config.md)).
 
 ## Keyboard
 
