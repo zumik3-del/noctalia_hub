@@ -10,10 +10,10 @@
 # plugin.toml stays authoritative and is re-read on enable, so a version bump
 # means editing both files. See docs/05-architecture.md.
 #
-# The directory is named `plugin/`, while the id's second segment is `hub`.
-# Noctalia finds plugin.toml by scanning the source, so loading works; the
-# community catalog's own validator does insist the directory match, which is
-# why publishing will mean renaming `plugin/` to `hub/`. See docs/07-decisions.md.
+# The directory is named `hub/`, after the id's second segment, because that is
+# where Noctalia looks for it: a plugin resolves to `<source>/<segment>/` and its
+# manifest is read from `<source>/<segment>/plugin.toml`. A directory named
+# anything else lists fine and then fails to materialise.
 
 [[plugin]]
 id = "zumik3-del/hub"
