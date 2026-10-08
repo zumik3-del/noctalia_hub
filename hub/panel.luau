@@ -14,7 +14,10 @@
   `layout:` (D24); nothing here invents a colour outside the palette.
 
   What the bar shares with this file — the four signal roles, the glyph baseline
-  and the card wrapper — is in visual.luau, not written out a second time here.
+  and the card wrapper — is in visual.luau. What this file keeps for itself is the
+  header, the tab strip, the fatal/loading screens and render(); the card rows
+  are rows.luau and the zones are zones.luau, each taking a `view` built here per
+  render rather than holding state of their own.
 
   Layout, colour and density follow docs/02-layout.md and
   docs/04-visual-language.md. What is deliberately not here yet, and why, is at
@@ -22,6 +25,7 @@
 ]]
 
 local Config = require("./config.luau")
+local Zones = require("./zones.luau")
 local Visual = require("./visual.luau")
 
 --- Both requires are for constants, not for behaviour: Config.DEFAULT_LAYOUT is
@@ -151,473 +155,6 @@ local function clockPattern()
     return doc.layout.clock
   end
   return Config.DEFAULT_LAYOUT.clock
-end
-
--- ── rows ─────────────────────────────────────────────────────────────────────
-
---- "from 14:02 · 3 attempts" — the line that makes a frozen reading honest. The
---- value stays on screen; this says how old it is and how many tries have failed
---- since (docs/06-failure-modes.md).
-local function ageLine(record)
-  if record.lastGoodAtMs == nil then
-    return nil
-  end
-
-  local parts = {
-    "from " .. noctalia.formatTime("%H:%M:%S", math.floor(record.lastGoodAtMs / 1000)),
-  }
-  if record.attempts > 0 then
-    parts[#parts + 1] = tostring(record.attempts) .. " attempts"
-  end
-
-  return table.concat(parts, " · ")
-end
-
---- The reason a card is not ok, as one line for the state marker's tooltip. A
---- config problem outranks a fetch problem: it is the reason the fetch may never
---- succeed. A stale card with no error shows its age instead, so the dimmed dot
---- explains itself too.
----
---- A card with no record has no `configError` — a card that failed validation
---- never got one. Its errors live on the card itself, which is the only place they
---- can be read from, so this is where a card with no `id` still reports itself.
-local function cardProblem(card, record)
-  if record ~= nil then
-    if record.configError ~= nil then
-      return record.configError
-    end
-    if record.error ~= nil then
-      return record.error
-    end
-    if record.state == "stale" then
-      return ageLine(record)
-    end
-  end
-
-  if #(card.errors or {}) > 0 then
-    return card.errors[1].message
-  end
-
-  return nil
-end
-
---- The second line under a card: what the thing is. A failure no longer takes
---- this line — it lives in the state marker's tooltip instead (D25), so a red
---- card still says what it measures while the reason waits one hover away on the
---- dot that is already coloured for it.
----
---- The age stays here when there is no description to show, because a frozen
---- reading with no age reads as a live one (docs/06-failure-modes.md).
-local function cardSecondLine(card, record, size)
-  if type(card.description) == "string" and card.description ~= "" then
-    return ui.label({ text = card.description, fontSize = size, color = SECONDARY, maxLines = 2 })
-  end
-
-  if record.state == "stale" or record.attempts > 0 then
-    local text = ageLine(record)
-    if text ~= nil then
-      return ui.label({ text = text, fontSize = size, color = DIMMED, maxLines = 1 })
-    end
-  end
-
-  return nil
-end
-
---- The update badge: a card's second reading, drawn before the state dot. It is
---- silent when there is nothing to say — no pending updates, or the check has not
---- answered yet — a warn-coloured count when there are, and a dim red glyph when
---- the check itself could not run (D27). "No updates" and "could not ask" are
---- different facts, and the panel must not draw them the same.
----
---- The count is the button that installs them: one target, so it is a button and
---- not a card-wide click (D26). The reason a failed check gives sits on the
---- glyph's tooltip, the same place a failed reading explains itself.
-local function updatesBadge(card, record, size)
-  local updates = record.updates
-  if updates == nil then
-    return nil
-  end
-
-  if updates.state == "warn" then
-    local onUpgrade = nil
-    if card.updates ~= nil and card.updates.run ~= nil then
-      onUpgrade = function()
-        dispatchAction("run", card.updates.run)
-      end
-    end
-    return ui.button({
-      text = "↑" .. updates.text,
-      variant = "ghost",
-      controlSize = "sm",
-      tooltip = noctalia.tr("panel.updates"),
-      onClick = onUpgrade,
-    })
-  end
-
-  if updates.state == "down" then
-    return ui.row({ tooltip = updates.error or noctalia.tr("panel.updates_failed"), align = "center" }, {
-      ui.glyph({ name = "alert-triangle", size = size, color = "error/0.7" }),
-    })
-  end
-
-  return nil
-end
-
---- A `kind: link` card is a bookmark, not an instrument: one line, the glyph on
---- the left, the title beside it, and the description pushed to the trailing
---- edge. It draws no reading, no state dot and no buttons — the whole row is the
---- target, so a click opens `link:` in the browser (D26). This is the one kind
---- that takes no `source` and no collector record (config.luau).
-local function renderLinkCard(card, sizes, index)
-  local size = fontSize(sizes.valueSize)
-  -- Keyed by position, not by `card.id`: a duplicate id is a config error (and is
-  -- reported as one), but two rows under one key make the second invisible on
-  -- screen, which is the one place a config error must not be able to hide. A
-  -- card with no id still has a position, so both problems draw.
-  local key = "card:" .. tostring(index)
-  local active = Visual.isHovered(key)
-  local border, borderWidth = cardBorder(active)
-
-  local badge = size + 17
-  local leading = ui.column({
-    width = badge,
-    height = badge,
-    radius = math.max(4, math.floor(badge / 4)),
-    fill = "primary/0.12",
-    align = "center",
-    justify = "center",
-  }, {
-    ui.glyph({ name = card.glyph or "link", size = size + 5, color = "primary" }),
-  })
-
-  -- The title sits in the flexible column so the description, added after it,
-  -- lands on the trailing edge instead of beside the title.
-  local children = {
-    leading,
-    ui.column({ flexGrow = 1 }, {
-      ui.label({
-        text = card.title or card.id or "—",
-        fontWeight = "bold",
-        fontSize = size + 2,
-        color = "on_surface",
-        maxLines = 1,
-      }),
-    }),
-  }
-
-  if type(card.description) == "string" and card.description ~= "" then
-    children[#children + 1] = ui.label({
-      text = card.description,
-      fontSize = size,
-      textAlign = "end",
-      color = SECONDARY,
-      maxLines = 1,
-    })
-  end
-
-  local url = card.actions and card.actions.link or nil
-  local onClick = nil
-  if url ~= nil then
-    onClick = function()
-      dispatchAction("link", url)
-    end
-  end
-
-  return Visual.cardShell({
-    key = key,
-    children = children,
-    gap = sizes.cardPadH,
-    paddingH = sizes.cardPadH,
-    paddingV = sizes.cardPadV,
-    radius = cardRadius(),
-    fill = active and hoverFill() or cardFill(),
-    border = border,
-    borderWidth = borderWidth,
-    onClick = onClick,
-  })
-end
-
---- One card, drawn as the activity block of github-kanban (D25): a badge on the
---- left, a two-line column in the middle, and the reading plus its state marker on
---- the right.
----
----     ┌──┐  Title                  34%  ●  ⇱  ⌨
----     └──┘  Description
----
---- The badge is kanban's avatar slot: hub has no images, so it fills it with the
---- card's glyph on a tinted rounded square, which is exactly what kanban does for
---- the rows that have no avatar.
----
---- The second line is the description. A failure does not take its place: the
---- reason lives on the state marker's tooltip, so a red card still says what it
---- measures (docs/06-failure-modes.md). The reading stays on the trailing edge — a
---- column of numbers has to read as a scale — and the action buttons follow it.
----
---- `sizes` is the density table, not a font size: a card needs both a font size
---- and padding, and passing two numbers around invites swapping them. `index` is
---- only there to name a card that has no id — a card missing one is already a
---- config error, but it still has to draw without colliding with another card
---- missing one.
-local function renderCard(card, record, sizes, index)
-  -- A link is a row of its own shape, drawn before any reading is looked at.
-  if card.kind == "link" then
-    return renderLinkCard(card, sizes, index)
-  end
-
-  local size = fontSize(sizes.valueSize)
-  -- A card the collector has no record for: it failed validation before it could
-  -- be given one. The shape has to be complete, because every field below is read
-  -- unconditionally.
-  record = record or { state = "pending", text = "", attempts = 0, rowCount = 0 }
-
-  local key = "card:" .. tostring(index)
-  local active = Visual.isHovered(key)
-  local border, borderWidth = cardBorder(active)
-
-  local state = record.state or "pending"
-  local role = Visual.STATE_ROLES[state] or Visual.STATE_ROLES.pending
-  local stateColor = role.color
-  local value = (record.text ~= nil and record.text ~= "") and record.text or "—"
-
-  local badge = size + 17
-  local leading = ui.column({
-    width = badge,
-    height = badge,
-    radius = math.max(4, math.floor(badge / 4)),
-    fill = "primary/0.12",
-    align = "center",
-    justify = "center",
-  }, {
-    ui.glyph({
-      name = card.glyph or Visual.KIND_GLYPH[card.kind] or "activity",
-      size = size + 5,
-      color = "primary",
-    }),
-  })
-
-  local lines = {
-    ui.label({
-      text = card.title or card.id or "—",
-      fontWeight = "bold",
-      fontSize = size + 2,
-      color = "on_surface",
-      maxLines = 2,
-    }),
-  }
-  local second = cardSecondLine(card, record, size)
-  if second ~= nil then
-    lines[#lines + 1] = second
-  end
-
-  -- The reading and its state marker, then the card's buttons. Each button has
-  -- its own target, so two of them is not the ambiguity the old one-action rule
-  -- guarded against — a click on one cannot mean the other (D15, D26). Only
-  -- `link` and `run` are drawn; `panel`, `deep_link` and `control` are still
-  -- schema, not buttons.
-  local marker = ui.glyph({ name = role.glyph, size = size, color = stateColor })
-  local problem = cardProblem(card, record)
-  if problem ~= nil then
-    -- `ui.box` is a leaf — it takes no children — so the dot that must keep its
-    -- own colour is wrapped in a row, which does take a tooltip (docs/05 UI
-    -- primitives).
-    marker = ui.row({ tooltip = problem, align = "center" }, { marker })
-  end
-
-  -- A status card says everything with its dot: the value column is not drawn for
-  -- `kind: status` (D27). The dot's colour and its tooltip carry the state, and a
-  -- word beside it was the same fact twice.
-  local trailing = {}
-  if card.kind ~= "status" then
-    trailing[#trailing + 1] = ui.label({
-      text = value,
-      fontSize = size - 1,
-      textAlign = "end",
-      color = stateColor,
-      maxLines = 1,
-    })
-  end
-
-  -- The update count sits between the reading and the dot: it is a second reading
-  -- about the same host, and it belongs on the reading side of the card (D27).
-  local badge = updatesBadge(card, record, size)
-  if badge ~= nil then
-    trailing[#trailing + 1] = badge
-  end
-
-  trailing[#trailing + 1] = marker
-
-  if card.actions ~= nil then
-    if card.actions.link ~= nil then
-      trailing[#trailing + 1] = ui.button({
-        glyph = "external-link",
-        variant = "ghost",
-        controlSize = "sm",
-        tooltip = noctalia.tr("panel.action_link"),
-        onClick = function()
-          dispatchAction("link", card.actions.link)
-        end,
-      })
-    end
-    if card.actions.run ~= nil then
-      trailing[#trailing + 1] = ui.button({
-        glyph = "terminal-2",
-        variant = "ghost",
-        controlSize = "sm",
-        tooltip = noctalia.tr("panel.action_terminal"),
-        onClick = function()
-          dispatchAction("run", card.actions.run)
-        end,
-      })
-    end
-  end
-
-  local children = {
-    leading,
-    ui.column({ flexGrow = 1, gap = 3 }, lines),
-  }
-  for _, node in ipairs(trailing) do
-    children[#children + 1] = node
-  end
-
-  return Visual.cardShell({
-    key = key,
-    children = children,
-    gap = sizes.cardPadH,
-    paddingH = sizes.cardPadH,
-    paddingV = sizes.cardPadV,
-    radius = cardRadius(),
-    fill = active and hoverFill() or cardFill(),
-    border = border,
-    borderWidth = borderWidth,
-  })
-end
-
--- ── zones ────────────────────────────────────────────────────────────────────
-
---- Problems in this zone, for the header count. Only real problems: a `pending`
---- card is an absence of one, and counting it would make every freshly loaded
---- panel look broken. Each card counts at most once.
-local function zoneProblemCount(domain)
-  local problems = 0
-  for _, card in ipairs(domain.cards) do
-    if card.hidden ~= true then
-      local record = cards[card.id]
-      local problem = false
-      if record ~= nil then
-        if record.state == "down" or record.state == "warn" or record.state == "stale" then
-          problem = true
-        end
-        -- A failed update check is a reading that could not be made, so it is a
-        -- fault in the card and it counts like one — the dim red badge is the
-        -- only trace of it otherwise, and a zone header that says "0" over a
-        -- broken badge is a lie the panel can see from the outside.
-        --
-        -- A *pending* update is deliberately not here. It is a fact about the
-        -- host rather than a fault in the card, and it already shows as the
-        -- badge on the card and the warn count in the header (D27, D28); a zone
-        -- with one pending package is not a zone with a problem.
-        if record.updates ~= nil and record.updates.state == "down" then
-          problem = true
-        end
-      end
-      if #(card.errors or {}) > 0 then
-        problem = true
-      end
-      if problem then
-        problems = problems + 1
-      end
-    end
-  end
-  return problems
-end
-
-local function renderZoneHeader(glyph, title, problems, size)
-  local children = {
-    ui.glyph({ name = glyph or "layout-columns", size = size + 1, color = DIMMED }),
-    Visual.glyphLabel({
-      text = string.upper(title or ""),
-      fontSize = size,
-      fontWeight = "semibold",
-      color = DIMMED,
-      maxLines = 1,
-    }),
-  }
-
-  if problems > 0 then
-    children[#children + 1] = Visual.glyphLabel({
-      text = tostring(problems),
-      fontSize = size,
-      fontWeight = "semibold",
-      color = "error",
-      maxLines = 1,
-    })
-  end
-
-  children[#children + 1] = ui.separator({ thickness = 1, color = DIMMED })
-
-  return ui.row({ gap = 6, align = "center" }, children)
-end
-
-local function renderZone(domain, sizes, rowGap, zonePadding, index)
-  local size = fontSize(sizes.valueSize)
-  local children = { renderZoneHeader(domain.glyph, domain.title or domain.id, zoneProblemCount(domain), size) }
-
-  local visible = 0
-  for index, card in ipairs(domain.cards) do
-    if card.hidden ~= true then
-      visible = visible + 1
-      children[#children + 1] = ui.spacer({ height = cardSpacing() })
-      children[#children + 1] = renderCard(card, cards[card.id], sizes, index)
-    end
-  end
-
-  -- A domain's own errors are not repeated here: they are in `doc.errors`, and
-  -- the config block above renders every one with its path. A card's errors do not
-  -- appear in that list twice — they render under the card, from `card.errors`.
-  --
-  -- An empty domain is a hint, not an empty box. docs/02 asks for a ready-made
-  -- template here; offering one needs a click target, and actions are not built
-  -- yet, so this is the honest half of it.
-  if visible == 0 then
-    children[#children + 1] = ui.spacer({ height = rowGap })
-    children[#children + 1] = ui.label({
-      text = noctalia.tr("zone.empty"),
-      fontSize = size - 1,
-      color = DIMMED,
-      maxLines = 1,
-    })
-  end
-
-  return ui.column({
-    key = "zone:" .. tostring(index),
-    gap = 0,
-    padding = zonePadding,
-  }, children)
-end
-
---- Document-level problems belong to no card and no zone, so they get their own
---- block above the content: an unknown secret, an unsupported version, a config
---- warning. Silent config problems are how a panel starts lying (docs/04 §6).
-local function renderConfigErrors(sizes, zonePadding)
-  if #(doc.errors or {}) == 0 then
-    return nil
-  end
-
-  local size = fontSize(sizes.valueSize)
-  local children = {
-    renderZoneHeader("file-alert", noctalia.tr("zone.config"), #(doc.errors), size),
-  }
-  for _, err in ipairs(doc.errors) do
-    children[#children + 1] = ui.spacer({ height = 4 })
-    children[#children + 1] = ui.label({
-      text = err.path .. " — " .. err.message,
-      fontSize = size - 1,
-      color = "error",
-      maxLines = 2,
-    })
-  end
-
-  return ui.column({ gap = 0, padding = zonePadding }, children)
 end
 
 -- ── header (docs/02-layout.md) ───────────────────────────────────────────────
@@ -777,6 +314,28 @@ end
 
 -- ── render ───────────────────────────────────────────────────────────────────
 
+--- What the row and zone renderers get from this file. Built per render rather
+--- than stored: `doc` and `cards` are replaced by their watches, and a view that
+--- held yesterday's tables would draw yesterday's readings. Handing over the
+--- layout helpers as functions is the same idea at a smaller scale — `doc.layout`
+--- is read once here, at the moment of drawing.
+local function view()
+  return {
+    sizes = style(),
+    document = doc,
+    records = cards,
+    size = fontSize,
+    radius = cardRadius,
+    spacing = cardSpacing,
+    fill = cardFill,
+    hoverFill = hoverFill,
+    border = cardBorder,
+    secondary = SECONDARY,
+    dimmed = DIMMED,
+    dispatch = dispatchAction,
+  }
+end
+
 function render()
   local sizes = style()
   local zonePadding = sizes.zonePadding
@@ -794,10 +353,11 @@ function render()
 
   ensureTab()
 
+  local v = view()
   local scrolling = {}
   local footer = nil
 
-  local configErrors = renderConfigErrors(sizes, zonePadding)
+  local configErrors = Zones.renderConfigErrors(v)
   if configErrors ~= nil then
     scrolling[#scrolling + 1] = configErrors
   end
@@ -807,9 +367,9 @@ function render()
     -- it must not push content around as its numbers change (D6). It is the one
     -- zone that draws on every tab, `overview` included.
     if domain.pin == "bottom" then
-      footer = renderZone(domain, sizes, sizes.rowGap, zonePadding, index)
+      footer = Zones.renderZone(v, domain, index)
     elseif activeTab == domain.id then
-      scrolling[#scrolling + 1] = renderZone(domain, sizes, sizes.rowGap, zonePadding, index)
+      scrolling[#scrolling + 1] = Zones.renderZone(v, domain, index)
     end
   end
 

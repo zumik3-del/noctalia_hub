@@ -9,6 +9,9 @@ hub/
 ├── panel.luau           # panel, pure subscriber
 ├── widget.luau          # compact bar summary
 ├── visual.luau          # signal roles, glyph helpers, the card wrapper
+├── rows.luau            # one card: the reading and the link bookmark
+├── zones.luau           # a zone, and the config-errors block
+├── util.luau            # the type predicates every layer uses
 ├── config.luau          # load and validate hub.yaml
 ├── pipeline.luau        # fetch → extract → map → format
 ├── .luaurc              # languageMode = nonstrict, matching the entry files
@@ -91,7 +94,9 @@ panel.render(tree)
 ```
 
 Builds a `ui.*` tree: zones in `ui.column`, rows in `ui.row`. It does not know where
-the data came from — it only renders what is in state.
+the data came from — it only renders what is in state. The rows and the zones
+live in `rows.luau` and `zones.luau`; what stays here is the header, the tab
+strip, the fatal and loading screens, and the `view` those two are handed.
 
 ### visual.luau — what both surfaces draw
 
@@ -111,6 +116,26 @@ through `setRedraw`. Modules cannot call into one another — the plugin's entri
 share no Lua memory, and only `noctalia.state` crosses the boundary — so a
 redraw is something the panel hands over rather than something visual.luau can
 find for itself.
+
+### rows.luau / zones.luau — the card and the zone
+
+The panel was one 975-line file, and 14 functions, until these left it. A card is
+two shapes (a reading, and the `kind: link` bookmark) plus the update badge; a
+zone is a header plus those cards, plus the config-errors block, which draws the
+same header with a file-alert glyph.
+
+Neither reads state. Both take a `view` — the density table, the layout helpers,
+the records table, the dispatcher — built by the panel on every render. A module
+that held `doc` or `cards` itself would hold the table from before the last watch
+fired and draw a reading the collector had already moved past, so the view is
+constructed per render and handed in.
+
+### util.luau — two type predicates
+
+`isString` and `isNumber`. Nothing else: they were written out three times before
+this existed, and `isNumber` is the one with a rule in it — it rejects NaN, which
+JSON decodes in some hosts and which compares false against every threshold.
+That rule belongs in one file.
 
 ### widget.luau — the summary
 
