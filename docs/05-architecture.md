@@ -3,7 +3,7 @@
 ## Three layers
 
 ```
-plugin/
+hub/
 ├── plugin.toml          # manifest: plugin_api 32, dependencies, settings
 ├── service.luau         # background: collect data → noctalia.state
 ├── panel.luau           # full-screen panel, pure subscriber
@@ -328,7 +328,7 @@ service in an LXC is `command` plus `ssh` plus `pct exec` in one argv element, a
 ## Verification
 
 ```bash
-noctalia plugins lint plugin/          # manifest vs code: settings, entries, panel rules
+noctalia plugins lint hub/          # manifest vs code: settings, entries, panel rules
 noctalia msg plugins list              # is the plugin installed and enabled
 ```
 

@@ -57,7 +57,7 @@ noctalia_hub/
 ├── AGENTS.md              # agent guidance (not committed)
 ├── docs/                  # project decision
 ├── config/                # example configs
-└── plugin/                # the plugin (Luau, plugin_api 32)
+└── hub/                   # the plugin (Luau, plugin_api 32)
     ├── plugin.toml        # manifest: entries, settings, dependencies
     ├── config.luau        # read and validate hub.yaml
     ├── pipeline.luau      # fetch → extract → map → format
@@ -74,7 +74,7 @@ There is no shared Lua memory between entry points, so state is the whole channe
 ## Running it
 
 ```bash
-noctalia plugins lint plugin/          # manifest vs code
+noctalia plugins lint hub/          # manifest vs code
 
 cp config/hub.skeleton.yaml ~/.config/noctalia/hub/hub.yaml
 ```

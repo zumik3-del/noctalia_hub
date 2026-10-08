@@ -17,7 +17,7 @@ the desktop — the feel of a separate space rather than another window.
 together with exclusive keyboard focus, and this design needs the focus:
 
 ```
-$ noctalia plugins lint plugin/
+$ noctalia plugins lint hub/
   error  panel entry 'panel': persistent = true is incompatible with keyboard_focus = "exclusive"
 ```
 
