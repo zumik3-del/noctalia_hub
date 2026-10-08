@@ -318,6 +318,18 @@ end
 --- docs/05-architecture.md build order.
 local BUILT_SOURCE_TYPES = { static = true, command = true }
 
+--- Required per type. Checked here so the error names the missing field rather
+--- than surfacing later as an empty reading. Module level because it is a
+--- constant: it was rebuilt on every `readSource` call — once per card, and once
+--- more per `updates` block — for a table nobody mutates.
+local REQUIRED_FIELDS = {
+  http = { "url" },
+  command = {},       -- argv or cmd, one of which is required
+  stream = { "cmd" },
+  rss = {},           -- url or feeds
+  static = { "value" },
+}
+
 local function readSource(raw, path, sink)
   if raw == nil then
     sink.add(path, "missing 'source' — every card needs one")
@@ -340,14 +352,7 @@ local function readSource(raw, path, sink)
 
   -- Required per type. Checked here so the error names the missing field rather
   -- than surfacing later as an empty reading.
-  local REQUIRED = {
-    http = { "url" },
-    command = {},       -- argv or cmd, one of which is required
-    stream = { "cmd" },
-    rss = {},           -- url or feeds
-    static = { "value" },
-  }
-  for _, field in ipairs(REQUIRED[kind]) do
+  for _, field in ipairs(REQUIRED_FIELDS[kind]) do
     if raw[field] == nil then
       sink.add(path, "source type " .. kind .. " requires '" .. field .. "'")
     end
@@ -854,9 +859,7 @@ end
 --- later hot reload a stat() rather than a guess.
 ---
 --- `cachePath` is nil for a file that must not leave a second copy on disk:
---- hub.secrets.yaml holds tokens, and a cached JSON of the same tokens is the
---- same leak with a friendlier extension. hub.yaml is public — it is committed —
---- so it still caches.
+--- `hubCachePath` decides which of the two config files gets one.
 local function convertToJson(path, cachePath, done)
   local info = noctalia.fileInfo(path)
   if info == nil then
@@ -912,55 +915,79 @@ local function decodeJson(text, path, done)
   done(value, nil)
 end
 
---- Loads hub.yaml and hub.secrets.yaml and hands the pair to build().
---- `onDone(model)` on success, `onDone(nil, reason)` when the config cannot be
---- read at all — the one case where the panel does not render (docs/06).
-function M.read(onDone)
+--- Where hub.yaml's converted JSON may be cached. The secrets file gets no such
+--- path: its converted JSON carries the same tokens, and writing it beside
+--- hub.json would leave them on disk in two places. Re-reading them is a yq run
+--- per config change, which the collector already pays for hub.yaml.
+local function hubCachePath()
+  local dataDir = noctalia.pluginDataDir()
+  if dataDir == nil then
+    return nil
+  end
+  return dataDir .. "/hub.json"
+end
+
+--- hub.yaml -> the decoded document. `onDoc(doc, reason)`; exactly one of the two
+--- is non-nil.
+local function readHubDocument(onDoc)
   local path = hubPath()
 
   if not noctalia.fileExists(path) then
-    onDone(nil, "no config at " .. path .. "\ncopy config/hub.skeleton.yaml there to start")
+    onDoc(nil, "no config at " .. path .. "\ncopy config/hub.skeleton.yaml there to start")
     return
   end
 
-  local dataDir = noctalia.pluginDataDir()
-  local cacheDir = dataDir
-
-  convertToJson(path, cacheDir and (cacheDir .. "/hub.json"), function(hubJson, err)
+  convertToJson(path, hubCachePath(), function(hubJson, err)
     if hubJson == nil then
-      onDone(nil, tostring(err))
+      onDoc(nil, err)
       return
     end
-    decodeJson(hubJson, M.hubFile, function(doc, decodeErr)
-      if doc == nil then
-        onDone(nil, tostring(decodeErr))
+    decodeJson(hubJson, M.hubFile, onDoc)
+  end)
+end
+
+--- hub.secrets.yaml -> the decoded table, or `{}` when there is no file. Secrets
+--- are optional: a config with no `${name}` in it needs none, and a missing file
+--- is not an error.
+local function readSecrets(onSecrets)
+  local path = secretsPath()
+
+  if not noctalia.fileExists(path) then
+    onSecrets({}, nil)
+    return
+  end
+
+  convertToJson(path, nil, function(secretsJson, err)
+    if secretsJson == nil then
+      onSecrets(nil, err)
+      return
+    end
+    decodeJson(secretsJson, M.secretsFile, onSecrets)
+  end)
+end
+
+--- Loads hub.yaml and hub.secrets.yaml and hands the pair to build().
+--- `onDone(model)` on success, `onDone(nil, reason)` when the config cannot be
+--- read at all — the one case where the panel does not render (docs/06).
+---
+--- Named steps rather than four nested callbacks: the chain is yq, decode, yq,
+--- decode, and nesting it all in one expression makes a failure in the last hop
+--- read like a failure in the first. Each step here is a function with its own
+--- `nil` case, so what a reason means is stated where it is produced.
+function M.read(onDone)
+  readHubDocument(function(doc, reason)
+    if doc == nil then
+      onDone(nil, reason)
+      return
+    end
+
+    readSecrets(function(secrets, secretsReason)
+      if secrets == nil then
+        onDone(nil, secretsReason)
         return
       end
 
-      local secretPath = secretsPath()
-      if not noctalia.fileExists(secretPath) then
-        -- Secrets are optional: a config with no ${name} in it needs no file.
-        onDone(M.build(doc, {}), nil)
-        return
-      end
-
-      -- No cache for the secrets file: the converted JSON carries the same
-      -- tokens, and writing it next to hub.json leaves them on disk in two
-      -- places. Re-reading them is a yq run per config change, which the
-      -- collector already pays for hub.yaml.
-      convertToJson(secretPath, nil, function(secretsJson, secretsErr)
-        if secretsJson == nil then
-          onDone(nil, tostring(secretsErr))
-          return
-        end
-        decodeJson(secretsJson, M.secretsFile, function(secrets, secretsDecodeErr)
-          if secrets == nil then
-            onDone(nil, tostring(secretsDecodeErr))
-            return
-          end
-          onDone(M.build(doc, secrets), nil)
-        end)
-      end)
+      onDone(M.build(doc, secrets), nil)
     end)
   end)
 end
