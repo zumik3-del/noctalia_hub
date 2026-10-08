@@ -458,9 +458,24 @@ end
 --- subscriber (docs/05-architecture.md). `link` opens the browser and nothing
 --- else; `run` hands a literal string to a terminal window, which is the whole
 --- difference between the two actions (D12, D20).
+--- How a URL leaves this plugin. `xdg-open` is the desktop-agnostic half of the
+--- freedesktop spec, and the other half — `$BROWSER`, `gio open`, `wslview` —
+--- is a distribution question. One named constant is where that grows, rather
+--- than a literal buried in the action.
+local LINK_OPENER = "xdg-open"
+
 local function performAction(action, target)
   if action == "link" then
-    noctalia.runAsync({ "xdg-open", target })
+    -- A host without `xdg-open` is a host where a card's `link:` cannot work at
+    -- all. Saying so is better than starting a command that was never going to
+    -- run: a click that silently does nothing is the failure mode the panel
+    -- exists to avoid (docs/04 §6), and the reason is not something a card can
+    -- carry — it is about the machine, not about the service.
+    if not noctalia.commandExists(LINK_OPENER) then
+      noctalia.notifyError("cannot open " .. target .. " — " .. LINK_OPENER .. " is not installed")
+      return
+    end
+    noctalia.runAsync({ LINK_OPENER, target })
     return
   end
 

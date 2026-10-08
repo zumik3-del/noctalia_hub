@@ -458,6 +458,17 @@ local function readActions(card, path, sink)
           sink.add(path, "'control' requires 'confirm' — a control always names its target before it fires (D15)")
         end
         -- deferred to a later version; see docs/05-architecture.md
+        --
+        -- TODO(D15): a `control` must be the only action on its card. The rule is
+        -- written down — a control changes state, and a second button that only
+        -- visits a URL beside it makes a mis-click mean "restart the service" —
+        -- but it is not enforced here, because `control` is not executed in this
+        -- build and an error nobody can see is a rule nobody can act on. It goes
+        -- in the same change as the button that fires it, not before.
+        --
+        -- The place is this loop: it already walks the closed set of action
+        -- fields for one card, so it sees a `control` and a `link` together at
+        -- the moment either of them is read.
       elseif not isString(value) or value == "" then
         sink.add(path .. "." .. field, "expected a non-empty string")
       else
