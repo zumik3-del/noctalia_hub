@@ -293,6 +293,14 @@ local function tickCard(card, record, stamp)
     return
   end
 
+  -- A `kind: link` card has no source to poll, and neither has a card whose
+  -- source failed validation — `readSource` returns nil and the config error is
+  -- already attached to the record. Polling either would ask the pipeline for a
+  -- fetch it cannot make.
+  if card.source == nil then
+    return
+  end
+
   if stamp >= record.nextDueAtMs then
     -- A fixed interval per card. The panel does not adapt the period to how
     -- quickly a source answers (docs/06-failure-modes.md).

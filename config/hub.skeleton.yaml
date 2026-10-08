@@ -203,32 +203,57 @@ domains:
 
 
   # ── Links ──────────────────────────────────────────────────────────────────
-  # kind: link needs no source to be a reading — it needs a place to go, and
-  # actions land with step 6.
+  # A `kind: link` card is a bookmark, not an instrument: no source, no state
+  # dot, no buttons. The whole row is the target — a click opens `link:` in the
+  # browser — so it is the one kind that omits `source`. The glyph is the picture
+  # on the left and `description`, when set, is pushed to the right edge; the row
+  # stays one line.
   - id: links
     title: Links
     glyph: link
 
     cards:
-      - id: link-metrics
-        title: Metrics
-        glyph: chart-line
+      - id: link-lxc-audit
+        title: LXC Audit
+        glyph: clipboard-list
         kind: link
-        source: { type: static, value: "—" }
+        description: Proxmox audit wiki
+        link: https://forgejo.home.lan/authelia/proxmox_audit/wiki
 
-      - id: link-uptime
-        title: Uptime
-        glyph: activity
+      - id: link-yt-mp3
+        title: YouTube to MP3
+        glyph: music
         kind: link
-        source: { type: static, value: "—" }
+        description: Download the audio
+        link: https://xyops.home.lan/api/app/form/v1/MpYWOFIdbO3nkCaS8Fmhj2l8QYSS3i42hgOOMzsLMSRBe4NGPOmxnAzrHO2joPKU
 
-      # `hidden: true` keeps a card in the config without rendering it. It does
-      # not stop its source: hiding a card is not a way to un-watch a service.
-      - id: link-scratch
-        title: Scratch
+      - id: link-yt-summary
+        title: YouTube Video Summary
+        glyph: file-text
         kind: link
-        hidden: true
-        source: { type: static, value: "—" }
+        description: Summarise a video
+        link: https://xyops.home.lan/api/app/form/v1/TSlQGv8T9WgvYuavUFKd0CVUs4o2m8IvqsjIvl0ZZNAXrT5SYg0i7Yz2sNdHEmnV
+
+      - id: link-pve-scripts
+        title: ProxmoxVE Community Scripts
+        glyph: script
+        kind: link
+        description: Community helper scripts
+        link: https://community-scripts.org/
+
+      - id: link-youtube
+        title: YouTube
+        glyph: brand-youtube
+        kind: link
+        description: Video site
+        link: https://youtube.com
+
+      - id: link-water
+        title: Manual water updater
+        glyph: droplet
+        kind: link
+        description: Water meter readings
+        link: https://xyops.home.lan/api/app/form/v1/yePQkKNWf0umHd0wvEV6aqDLms8pSAT4VT8fNT6RmHD8uYvGFSsZFpxj0opNvkC6
 
 # Secrets are not needed here. When you move to config/hub.example.yaml, put them
 # in hub.secrets.yaml (mode 0600) and reference them as "${name}" — quoted inside

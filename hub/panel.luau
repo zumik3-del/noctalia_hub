@@ -272,8 +272,8 @@ local function updatesBadge(card, record, size)
       end
     end
     return ui.button({
-      text = updates.text,
-      variant = "secondary",
+      text = "↑" .. updates.text,
+      variant = "ghost",
       controlSize = "sm",
       tooltip = noctalia.tr("panel.updates"),
       onClick = onUpgrade,
@@ -287,6 +287,83 @@ local function updatesBadge(card, record, size)
   end
 
   return nil
+end
+
+--- A `kind: link` card is a bookmark, not an instrument: one line, the glyph on
+--- the left, the title beside it, and the description pushed to the trailing
+--- edge. It draws no reading, no state dot and no buttons — the whole row is the
+--- target, so a click opens `link:` in the browser (D26). This is the one kind
+--- that takes no `source` and no collector record (config.luau).
+local function renderLinkCard(card, sizes, index)
+  local size = fontSize(sizes.valueSize)
+  local key = "card:" .. (card.id or ("unnamed-" .. tostring(index)))
+  local active = hovered == key
+  local border, borderWidth = cardBorder(active)
+
+  local badge = size + 17
+  local leading = ui.column({
+    width = badge,
+    height = badge,
+    radius = math.max(4, math.floor(badge / 4)),
+    fill = "primary/0.12",
+    align = "center",
+    justify = "center",
+  }, {
+    ui.glyph({ name = card.glyph or "link", size = size + 5, color = "primary" }),
+  })
+
+  -- The title sits in the flexible column so the description, added after it,
+  -- lands on the trailing edge instead of beside the title.
+  local children = {
+    leading,
+    ui.column({ flexGrow = 1 }, {
+      ui.label({
+        text = card.title or card.id or "—",
+        fontWeight = "bold",
+        fontSize = size + 2,
+        color = "on_surface",
+        maxLines = 1,
+      }),
+    }),
+  }
+
+  if type(card.description) == "string" and card.description ~= "" then
+    children[#children + 1] = ui.label({
+      text = card.description,
+      fontSize = size,
+      textAlign = "end",
+      color = SECONDARY,
+      maxLines = 1,
+    })
+  end
+
+  local url = card.actions and card.actions.link or nil
+  local onClick = nil
+  if url ~= nil then
+    onClick = function()
+      dispatchAction("link", url)
+    end
+  end
+
+  return ui.row({
+    key = key,
+    gap = sizes.cardPadH,
+    paddingH = sizes.cardPadH,
+    paddingV = sizes.cardPadV,
+    radius = cardRadius(),
+    fill = active and hoverFill() or cardFill(),
+    border = border,
+    borderWidth = borderWidth,
+    align = "center",
+    onClick = onClick,
+    onHover = function(value)
+      local nextHovered = value == "true" and key or nil
+      if nextHovered ~= hovered then
+        hovered = nextHovered
+        render()
+      end
+    end,
+  }, children)
 end
 
 --- One card, drawn as the activity block of github-kanban (D25): a badge on the
@@ -311,6 +388,11 @@ end
 --- config error, but it still has to draw without colliding with another card
 --- missing one.
 local function renderCard(card, record, sizes, index)
+  -- A link is a row of its own shape, drawn before any reading is looked at.
+  if card.kind == "link" then
+    return renderLinkCard(card, sizes, index)
+  end
+
   local size = fontSize(sizes.valueSize)
   -- A card the collector has no record for: it failed validation before it could
   -- be given one. The shape has to be complete, because every field below is read

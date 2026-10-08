@@ -578,7 +578,12 @@ local function readCard(raw, path, seenIds, defaults, sink)
   end
 
   -- data
-  card.source = readSource(raw.source, path .. ".source", own)
+  -- A `kind: link` card is a bookmark, not an instrument: it renders from its
+  -- `link:` target and has nothing to fetch, so it is the one kind allowed to
+  -- omit `source`.
+  if raw.source ~= nil or raw.kind ~= "link" then
+    card.source = readSource(raw.source, path .. ".source", own)
+  end
   card.intervalSec = readPositive(raw.interval_sec, path .. ".interval_sec", own, defaults.intervalSec)
   card.timeoutMs = readPositive(raw.timeout_ms, path .. ".timeout_ms", own, defaults.timeoutMs)
   card.staleAfterSec = readPositive(raw.stale_after_sec, path .. ".stale_after_sec", own, defaults.staleAfterSec)
