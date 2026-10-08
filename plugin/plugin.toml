@@ -9,8 +9,9 @@ tags = ["bar", "panel", "service", "indicator", "utility", "system"]
 description = "Full-screen instrument panel: service status, metrics, releases and links from one YAML file."
 dependencies = ["yq"]
 
-# Not implemented yet — this manifest records the design decisions.
-# See docs/05-architecture.md
+# Skeleton build: config.luau loads and validates hub.yaml, service.luau publishes
+# cards into noctalia.state, panel.luau and widget.luau only read that state.
+# See docs/05-architecture.md.
 
 [[widget]]
 id = "summary"
@@ -30,6 +31,13 @@ entry = "widget.luau"
   description_key = "settings.compact.description"
   default = false
 
+# `persistent = true` is deliberately absent: Noctalia rejects it together with
+# keyboard_focus = "exclusive", and the keyboard-first panel needs the focus.
+# See docs/07-decisions.md (D1).
+#
+# capture_keys lists only what the panel answers today. Capturing a key it cannot
+# honour takes that key away from every other surface, so "/" and "?" are added
+# when the search and the shortcut overlay exist.
 [[panel]]
 id = "panel"
 entry = "panel.luau"
@@ -37,9 +45,9 @@ width = "fill"
 height = "fill"
 placement = "floating"
 position = "center"
-persistent = true
+dismiss_on_outside_click = false
 keyboard_focus = "exclusive"
-capture_keys = ["escape", "return", "r", "slash", "question"]
+capture_keys = ["escape", "r"]
 
 [[service]]
 id = "collector"

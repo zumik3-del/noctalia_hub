@@ -10,11 +10,20 @@ Exactly five, no more. Each is unambiguously determined.
 
 | State | Condition | Rendering |
 |---|---|---|
-| `pending` | First sample has not arrived | Skeleton, no figures |
+| `pending` | First sample has not arrived | Value column shows `—`, hollow dot |
 | `ok` | Data received, thresholds not crossed | Value, `primary` |
-| `warn` | `warn` threshold crossed | Value, `secondary` |
-| `down` | Source errored or `ok_when` was false | `—`, `error`, pulsing |
-| `stale` | Data older than `stale_after_sec` | Value + timestamp, `on_surface_variant` |
+| `warn` | `warn` threshold crossed, or a `map` value says so | Value, `secondary` |
+| `down` | Source errored, or `ok_when` was false, or the reading makes no sense | Value if there is one, `error`, pulsing |
+| `stale` | Data older than `stale_after_sec` | Value + age, `on_surface_variant` |
+
+A card has two error channels, not one. `error` is a problem with the source and
+clears on its own when the source recovers. `configError` is a problem with the card
+itself — a bad field, a missing secret — and is already true before the first poll,
+because it came from reading the file rather than from fetching anything.
+
+Staleness needs something to be stale about. A card that has **never** succeeded
+stays `down` indefinitely rather than aging into a dimmer `down`, because there is
+no reading for the age to qualify.
 
 ## What a card shows while the API is down for three minutes
 
@@ -41,15 +50,28 @@ rather than the connection.
 ## Error hierarchy
 
 ```
-invalid YAML ──────────────► panel does not render at all; reason shown
-  └─ invalid structure ───► panel renders, offending zones empty
-       └─ card error ─────► only that card: name + error text
-            └─ source failure ► card in stale / down
+converter unavailable ─────► panel does not render at all; reason shown
+  └─ invalid YAML ────────► panel does not render at all; reason shown
+       └─ invalid structure ► panel renders; the error is a block above the zones
+            └─ card error ─► only that card: title + the error under it
+                 └─ source failure ► card in down / stale, value retained
 ```
 
 A broken card **does not break the others**. This is a testable requirement: you
 will eventually have one malformed card, and the whole panel must not disappear
 because of it.
+
+Two of those five levels are worth being precise about, because they are easy to
+conflate and they behave differently:
+
+- **"converter unavailable" is separate from "invalid YAML".** `yq` is a declared
+  dependency, and on a machine without it the file is not wrong — it was never
+  read. Reporting that as a YAML error would send the user looking for a typo in
+  their config, which is not where the problem is.
+- **An empty-but-valid document is not fatal.** `domains: []` renders an empty
+  panel with a hint in it. Only a config that cannot be read at all refuses to
+  render, because an empty instrument panel and a healthy one look alike, and the
+  whole point of this document is that they must not.
 
 ## Config errors point at a line
 
@@ -62,6 +84,33 @@ through.
 
 Messages must be actionable — not `invalid value`, but
 `unknown source type "htp" (expected: http, command, stream, rss, static)`.
+
+### What actually ships: a path, not a line
+
+`yq` does not report line numbers, so a semantic error cannot carry one. What it
+does carry is the **document path**, and that is what the panel shows:
+
+```
+domains[2].cards[5].source.type — unknown source type "htp" (expected: http, command, stream, rss, static)
+domains[0].cards[3].thresholds — warn must be below critical, got warn=90 critical=10
+domains[1].cards[0].title — unknown secret "${proxmox_tokenn}" (hub.secrets.yaml has no such key)
+```
+
+This is worse than a line number for one job — jumping straight to the offending
+line — and better for another: it survives a reformat, and it survives the config
+being read by someone who did not write it. Given the file lives in git and gets
+reviewed as a diff, the path is arguably the more durable handle.
+
+Two classes of error are reported differently, and deliberately:
+
+| Class | Reported as | Example |
+|---|---|---|
+| YAML will not parse | the converter's own message, which does carry a line | `hub.yaml:42: did not find expected node content` |
+| The document parses but is wrong | a document path | `domains[2].cards[5].source.type` |
+| A secret is missing | a document path plus the file that should have held it | `domains[0].cards[3].auth.token` |
+
+A card that fails validation is not dropped from the panel — it renders with its
+error as a second line, next to the cards that are fine.
 
 ## One dead feed inside a merge
 

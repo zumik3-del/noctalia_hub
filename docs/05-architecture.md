@@ -10,9 +10,21 @@ plugin/
 ├── widget.luau          # compact bar summary
 ├── config.luau          # load and validate hub.yaml
 ├── pipeline.luau        # fetch → extract → map → format
-├── sources/             # source type implementations
+├── .luaurc              # languageMode = nonstrict, matching the entry files
 └── translations/en.json
 ```
+
+There is no `sources/` directory. Each source type is a branch inside
+`Pipeline.fetch`, and the schema's promise is that a new type plugs into `fetch`
+without touching `extract`, `map` or `format` ([D4](07-decisions.md)). A directory
+of source modules would only invite the extraction fields to drift per type, which
+is the failure D4 exists to prevent.
+
+`.luaurc` is the same file the official plugin repository ships: `nonstrict`
+matches the `--!nonstrict` directive every entry file starts with, which is the
+right fit for dynamically-typed scripts — full autocomplete and real typo
+diagnostics, without strict-mode noise about absent optional values. Point
+luau-lsp at the official `noctalia.d.luau` for the API surface.
 
 ### service.luau — data only
 
@@ -43,7 +55,30 @@ noctalia.runAsync(argv, function(res) ... end, timeoutMs)
 noctalia.runStream(cmd, function(line) ... end)
 noctalia.json.decode(str)
 noctalia.getConfig(key)
+noctalia.state.set("hub.cards", { ... })
 ```
+
+The service writes four state keys and nothing else. Every one is namespaced
+`hub.`, because `noctalia.state` is a single flat store shared by all plugins:
+
+| Key | Contents |
+|---|---|
+| `hub.config` | the validated model, zones and all |
+| `hub.cards` | `cardId -> runtime record`, the readings |
+| `hub.summary` | per-state counts, for the header line and the bar widget |
+| `hub.fatal` | why the config could not be read, `""` when it could |
+| `hub.cmd` | panel → collector requests; `refresh` is the only one so far |
+
+A runtime record is `{ state, text, fields, rows, rowCount, error, configError,
+lastGoodAtMs, attempts, nextDueAtMs }`. `error` is a problem with the source;
+`configError` is a problem with the card itself, which is already true before the
+first poll and does not clear when the source recovers.
+
+**A publish that changes nothing is a publish that costs a tree rebuild.** Both
+subscribers redraw on every write, so the collector compares a signature of
+everything drawn and skips the write when it matches. Ages are deliberately absent
+from that signature: the panel derives them from `noctalia.nowMs()` at render time,
+so the clock ticks without the collector writing once a second.
 
 ### panel.luau — presentation only
 
@@ -198,6 +233,16 @@ dependencies = ["yq"]
 id = "summary"
 entry = "widget.luau"
 
+  [[widget.setting]]
+  key = "glyph"
+  type = "glyph"
+  default = "gauge"
+
+  [[widget.setting]]
+  key = "compact"
+  type = "bool"
+  default = false
+
 [[panel]]
 id = "panel"
 entry = "panel.luau"
@@ -205,23 +250,52 @@ width = "fill"
 height = "fill"
 placement = "floating"
 position = "center"
-persistent = true
+dismiss_on_outside_click = false
 keyboard_focus = "exclusive"
-capture_keys = ["escape", "return", "r", "slash", "question"]
+capture_keys = ["escape", "r"]
+
+[[service]]
+id = "collector"
+entry = "service.luau"
 ```
 
 The full-screen panel is a supported case rather than a hack: v5 handles
-`width`/`height` `"fill"`, `persistent`, `keyboard_focus` and `capture_keys`.
+`width`/`height` `"fill"` with `placement = "floating"`, plus
+`dismiss_on_outside_click`, `keyboard_focus` and `capture_keys`.
 
-`return` is captured because it activates the focused card — otherwise `run:` and
-`link:` would only be reachable with a mouse, and the panel is keyboard-first.
+There is no `persistent = true`, because Noctalia rejects it alongside exclusive
+keyboard focus — see [D1](07-decisions.md).
+
+`capture_keys` lists only what the panel answers today. Capturing a key the panel
+cannot honour takes it away from every other surface, so `return`, `/` and `?` are
+added with the features behind them rather than reserved up front.
+
+Manifest rules worth knowing, all enforced by `noctalia plugins lint`:
+
+| Rule | Message |
+|---|---|
+| `persistent = true` needs `dismiss_on_outside_click = false` | rejected |
+| `persistent = true` is incompatible with `keyboard_focus = "exclusive"` | rejected |
+| `width`/`height` `"fill"` needs `placement = "floating"` | rejected |
+| `capture_keys` needs `keyboard_focus` `on_demand` or `exclusive` | rejected |
+| a declared setting that no entry reads | warning |
+
+That last one is why `widget.luau` reads both `glyph` and `compact`: lint reports a
+setting declared and never read, which is how a settings key that does nothing gets
+shipped.
 
 ## Build order
 
 1. **Skeleton** — `plugin.toml`, static zone list from the config, `widget.luau`.
-   Goal: `noctalia plugins lint` passes and the panel opens.
+   Goal: `noctalia plugins lint` passes and the panel opens. **Done.** `lint` is
+   clean, `hub.skeleton.yaml` validates with zero errors, and the renderer covers
+   all six kinds and all five states. What landed with it: `config.luau` split into
+   an IO half and a pure half, `map` and `thresholds` in `map`-position, per-card
+   staleness, the two-channel error model, and `r` as a refresh request.
 2. **One source** — Proxmox via `noctalia.http`, with the full
-   `fetch → extract → map → format` chain working.
+   `fetch → extract → map → format` chain working. This is where `extract` and
+   `ok_when` become real: both are jq over a payload, and neither has an
+   implementation yet.
 3. **Remaining source types** — `command`, `rss`, `stream`, `static`.
 4. **Thresholds, staleness, sparklines.**
 5. **Hot reload.**
@@ -254,9 +328,30 @@ service in an LXC is `command` plus `ssh` plus `pct exec` in one argv element, a
 ## Verification
 
 ```bash
-noctalia plugins lint plugin/
-noctalia msg plugins list
+noctalia plugins lint plugin/          # manifest vs code: settings, entries, panel rules
+noctalia msg plugins list              # is the plugin installed and enabled
 ```
 
-`lint` cross-checks declared settings against plugin code. Runtime verification is
-manual: editing `hub.yaml` must take effect without restarting the shell.
+`lint` cross-checks declared settings against plugin code and enforces the panel
+rules in the manifest table above. It exits 1 on an error-level problem, so it
+belongs in a pre-commit hook.
+
+Runtime verification is manual: editing `hub.yaml` must take effect without
+restarting the shell.
+
+## What the skeleton does not render yet
+
+The renderer is complete for all six kinds, and the pipeline is complete for
+`static` sources. What is missing is the list at the bottom of `panel.luau`, which
+records each gap against the build-order step that closes it. Three of them are
+worth stating here, because they are API limits rather than unfinished work:
+
+- **No flex wrap.** `plugin_api` 32 has no wrapping flex container, so zones stack
+  vertically and the panel scrolls. [02](02-layout.md)'s side-by-side sketch is a
+  picture of the idea, not of the layout.
+- **No tabular figures.** `fontFamily` is the only typography control, and it needs
+  a font loaded through `noctalia.loadFont` — a vendored asset, which is a [D21](07-decisions.md)
+  decision rather than a rendering detail. Values are right-aligned instead.
+- **No per-widget colour layer.** `barWidget.setColor` reads theme roles, not the
+  bar's per-instance user overrides ([D21](07-decisions.md)), so the bar summary
+  draws from the palette and nothing else.

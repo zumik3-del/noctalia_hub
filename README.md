@@ -3,8 +3,11 @@
 An instrument panel for [Noctalia](https://noctalia.dev) v5 — a full-screen control
 centre showing links, service status, metrics and release feeds.
 
-> **Status: concept.** No plugin implementation yet. This repository holds the
-> project decision: config schema, API surface, visual rules and layout.
+> **Status: skeleton.** The plugin exists and opens; only `source: static` fetches.
+> `http`, `command`, `stream` and `rss` are validated and report themselves as
+> unbuilt. The panel renders every zone, every card kind and every card state, so
+> what is missing is transport, not layout. See
+> [docs/05-architecture.md](docs/05-architecture.md) for the build order.
 
 ## Idea
 
@@ -54,9 +57,36 @@ noctalia_hub/
 ├── AGENTS.md              # agent guidance (not committed)
 ├── docs/                  # project decision
 ├── config/                # example configs
-└── plugin/                # future plugin code (Luau)
-    └── plugin.toml
+└── plugin/                # the plugin (Luau, plugin_api 32)
+    ├── plugin.toml        # manifest: entries, settings, dependencies
+    ├── config.luau        # read and validate hub.yaml
+    ├── pipeline.luau      # fetch → extract → map → format
+    ├── service.luau       # collector: polls, publishes into noctalia.state
+    ├── panel.luau         # full-screen panel, a pure subscriber
+    ├── widget.luau        # compact bar summary
+    └── translations/      # en.json
 ```
+
+Three layers, one direction. `service.luau` talks to the world and publishes into
+`noctalia.state`; `panel.luau` and `widget.luau` read that state and nothing else.
+There is no shared Lua memory between entry points, so state is the whole channel.
+
+## Running it
+
+```bash
+noctalia plugins lint plugin/          # manifest vs code
+
+cp config/hub.skeleton.yaml ~/.config/noctalia/hub/hub.yaml
+```
+
+`hub.skeleton.yaml` is the config this build renders end to end — every card uses
+`source: { type: static }`, so it needs no network, no shell and no container.
+`config/hub.example.yaml` is the real thing, with all five source types; on the
+skeleton build each of its cards reports itself as unbuilt rather than showing
+nothing.
+
+Requires `yq` at runtime, for the one-time YAML→JSON conversion
+([D2](docs/07-decisions.md)).
 
 ## Compatibility
 

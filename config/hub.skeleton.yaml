@@ -1,0 +1,199 @@
+# noctalia_hub — skeleton config
+#
+# Copy to ~/.config/noctalia/hub/hub.yaml:
+#
+#   cp config/hub.skeleton.yaml ~/.config/noctalia/hub/hub.yaml
+#
+# Every card here uses `source: { type: static }`, because `static` is the only
+# source type this build fetches (docs/05-architecture.md, build order). Nothing
+# in this file touches the network, a shell or a container, so it renders exactly
+# as written and is the fastest way to see the panel's shape.
+#
+# When http / command / stream / rss land, config/hub.example.yaml is the real
+# thing — and every one of its cards will say "not implemented in this build"
+# until then, which is the panel being honest rather than empty.
+#
+# Field reference: docs/03-config.md
+
+version: 1
+
+layout:
+  density: compact          # compact | comfortable
+  show_header: true
+  clock: "%H:%M:%S"
+  stale_badge: true
+
+defaults:
+  interval_sec: 60
+  timeout_ms: 8000
+  stale_after_sec: 300
+  graph_points: 48
+
+
+domains:
+
+  # ── Instruments ────────────────────────────────────────────────────────────
+  # The panel's reason to exist: what is this thing, is it alive, and is the
+  # number it reports one you have to look at.
+  - id: services
+    title: Services
+    glyph: server
+    interval_sec: 30
+
+    cards:
+      - id: gateway
+        title: Gateway
+        glyph: router
+        kind: status
+        description: Keenetic, gateway and routing
+        source: { type: static, value: running }
+
+      - id: storage
+        title: Storage
+        glyph: database
+        kind: status
+        source: { type: static, value: running }
+
+      # `map` answers "what does this value mean" — see docs/03-config.md. A value
+      # the map does not list is `down` with the reason attached, never a guess.
+      - id: dns
+        title: DNS
+        glyph: world
+        kind: status
+        source: { type: static, value: degraded }
+        map:
+          running: ok
+          degraded: warn
+          stopped: down
+
+      # `format` and `unit` are the value column. `{n}` is the extracted value.
+      - id: nodes
+        title: Nodes
+        glyph: hexagon
+        kind: metric
+        span: 2
+        source: { type: static, value: 3 }
+        format: "{n} nodes"
+        thresholds: { warn: 6, critical: 8 }
+        graph: true
+
+      # A metric without thresholds is a config error (D10): a green 38% says
+      # nothing about whether 38% is nominal.
+      - id: backup-age
+        title: Backup age
+        glyph: database-backup
+        kind: metric
+        source: { type: static, value: 7 }
+        format: "{n}"
+        unit: "h"
+        thresholds: { warn: 24, critical: 72 }
+
+      # kind: list collapses to a count. Expansion on Enter lands with step 8;
+      # a static list is here so the count is visible before then.
+      - id: routes
+        title: routes
+        glyph: route
+        kind: list
+        max_items: 6
+        format: "{n} sites"
+        source:
+          type: static
+          value:
+            - dynacat.home.lan
+            - grafana.home.lan
+            - ops.home.lan
+
+
+  # ── Releases ───────────────────────────────────────────────────────────────
+  # The domain-level interval is the whole of release polling. A kind does not get
+  # its own timer — a kind decides how a reading is drawn, not how often it is
+  # fetched (D4).
+  - id: releases
+    title: Releases
+    glyph: tag
+    interval_sec: 900
+
+    cards:
+      - id: shell
+        title: Noctalia
+        kind: release
+        source: { type: static, value: "5.2.1" }
+
+      - id: terminal
+        title: Kitty
+        kind: release
+        source: { type: static, value: "0.36" }
+
+
+  # ── Links ──────────────────────────────────────────────────────────────────
+  # kind: link needs no source to be a reading — it needs a place to go, and
+  # actions land with step 6.
+  - id: links
+    title: Links
+    glyph: link
+
+    cards:
+      - id: link-metrics
+        title: Metrics
+        glyph: chart-line
+        kind: link
+        source: { type: static, value: "—" }
+
+      - id: link-uptime
+        title: Uptime
+        glyph: activity
+        kind: link
+        source: { type: static, value: "—" }
+
+      # `hidden: true` keeps a card in the config without rendering it. It does
+      # not stop its source: hiding a card is not a way to un-watch a service.
+      - id: link-scratch
+        title: Scratch
+        kind: link
+        hidden: true
+        source: { type: static, value: "—" }
+
+
+  # ── System ─────────────────────────────────────────────────────────────────
+  # `pin: bottom` takes the zone out of the scrolling flow: it is background, and
+  # it must not push content around as its numbers change (D6). At most one
+  # domain may pin.
+  - id: system
+    title: System
+    glyph: cpu
+    pin: bottom
+    interval_sec: 15
+    stale_after_sec: 60
+
+    cards:
+      - id: cpu
+        title: CPU
+        glyph: cpu
+        kind: metric
+        source: { type: static, value: 34 }
+        format: "{n}%"
+        thresholds: { warn: 80, critical: 95 }
+        graph: 48
+
+      - id: memory
+        title: MEM
+        glyph: server-2
+        kind: metric
+        source: { type: static, value: 48 }
+        format: "{n}%"
+        thresholds: { warn: 85, critical: 95 }
+        graph: 48
+
+      - id: disk
+        title: Disk /
+        glyph: hard-drive
+        kind: metric
+        source: { type: static, value: 71 }
+        format: "{n}%"
+        thresholds: { warn: 85, critical: 93 }
+        graph: 48
+
+
+# Secrets are not needed here. When you move to config/hub.example.yaml, put them
+# in hub.secrets.yaml (mode 0600) and reference them as "${name}" — quoted inside
+# a flow mapping, or YAML reads the brace as a nested mapping. See docs/03-config.md.

@@ -32,6 +32,15 @@ Two reasons:
 
 Numbers are right-aligned: a column has to read as a scale.
 
+**The right-alignment ships; the fixed-width figures do not, and cannot yet.**
+`plugin_api` 32 exposes no tabular-figure control. The only typography lever is
+`fontFamily`, and it needs a font file registered through `noctalia.loadFont` —
+which is a vendored asset carrying an attribution and a visible version, so it is a
+[D21](07-decisions.md) decision rather than a rendering detail. Loading a font to
+fix a glyph width is the wrong trade to make inside an instrument panel build;
+until someone decides it deliberately, values are right-aligned and the digits are
+the shell's.
+
 ## 3. Density, not air
 
 Small type, thin separators, minimal padding. A space station is cramped, not airy.

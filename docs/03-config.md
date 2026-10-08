@@ -200,8 +200,18 @@ zone, not to add a switch. The description stays a selection-time detail.
 | `map` | Extracted value ⇒ state, e.g. `{ 0: ok, 1: down }` |
 | `interval_sec` | Poll period; inherited from `defaults` |
 | `timeout_ms` | Timeout; defaults to 8000 |
-| `stale_after_sec` | Age at which the card dims |
+| `stale_after_sec` | Age at which the card dims; defaults to 300 |
 | `retries` | Retry count on failure |
+
+`retries` is validated but not yet acted on. There is no retry loop to configure
+until step 2 lands, and a setting that does nothing is worse than an absent one —
+which is why the build records its own gaps rather than implying they work.
+
+**A value the `map` does not list is `down`, with the value shown.** Not `ok`
+because the list was not consulted, and not `warn` because it might be fine. A
+`map` is an exhaustive statement about what the values mean, so an unexpected one
+is the service having changed shape under the config, and that is worth a red dot
+and the value that caused it.
 
 `ok_when` and `map` answer different questions, and both are needed. `ok_when` is a
 predicate over the **parsed response**, evaluated at fetch time — its bare
@@ -211,6 +221,14 @@ value**, and translates it into a state (`0: ok`, `1: down`). A card asking "did
 response say the right thing" uses `ok_when`; a card asking "what does this number
 mean" uses `map`.
 
+A card carrying both is legal, and `map` wins — a value the author has named
+explicitly is the more specific instruction, and `ok_when` on the same card is
+about the response rather than the reading.
+
+**`map` keys accept numbers unquoted.** `0: ok` and `"0": ok` are the same key;
+JSON cannot tell them apart on the way back in, so the config author should not have
+to care. A card whose value is a string is matched on that string.
+
 ### Presentation
 
 | Field | Description |
@@ -219,6 +237,19 @@ mean" uses `map`.
 | `format` | Substitution template, e.g. `"{n} nodes"` |
 | `unit` | Suffix: `"%"`, `"ms"`, `"MB"` |
 | `graph` | `true` / a point count / `false` |
+
+`format` placeholders are plain field names: `{n}` for the extracted value, plus
+any key of a mapping value and, on a `list` card, the count. `{n}`, `{0}` and
+`{status}` substitute; `{n.status}` does not, and stays in the output as written —
+a template that quietly rendered half of itself would be worse than one that looks
+broken.
+
+**A placeholder with nothing to put in it stays visible.** `"{n} nodes"` with no
+extracted value renders as `{n} nodes`, not as ` nodes`. An empty string reads as
+a service with zero nodes; the broken template reads as a broken template.
+
+`thresholds` must have `warn` below `critical`, and the validator says so rather
+than accepting a card whose amber is unreachable.
 
 ## Actions
 
@@ -423,6 +454,23 @@ Placeholders available inside `deep_link`:
 `tags:_error date:>=today` contains a space and a `>`, neither of which is legal
 unencoded. Encoding is the plugin's job — a user who has to percent-encode a
 query by hand stops writing queries.
+
+**`{query}` is optional, and a `deep_link` with no placeholder at all is legal.**
+A deep link points into another application's own URL scheme, and that scheme's
+vocabulary is usually not the source's: xyOps takes `tags:_error` on its API and
+`result=error` in its UI. That mapping is xyOps-internal knowledge and it lives in
+the user's config, where they can see it and update it. The validator requires a
+placeholder in a `link_template` — which is built from extracted fields by
+definition — and requires none in a `deep_link`.
+
+What `{query}` actually buys is narrower than it looks, and worth being exact
+about: it removes the *date* half of the duplication, not the *vocabulary* half.
+On an application whose UI accepts the same query string its API does, it removes
+all of it:
+
+```yaml
+deep_link: "https://ops.example.lan/#Search?q={query}"   # nothing left to keep in sync
+```
 
 This is deliberately generic, not an xyOps feature. Any REST source with a web UI
 and a query language gets the same benefit; see

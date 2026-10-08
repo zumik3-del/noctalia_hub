@@ -41,6 +41,23 @@ whole.
 The instrument-panel feel survives (groups with headers, aligned left edges) while
 size mismatches stop being a problem.
 
+### What actually renders
+
+**Zones stack vertically, one per row, and the panel scrolls.** `plugin_api` 32 has
+no wrapping flex container — `ui.column` and `ui.row` lay out and there is no
+`flexWrap`, so a masonry flow is not expressible. The sketches above are the idea;
+the shipped layout is one column of zones.
+
+The rule they were making survives intact, because it was never really about
+columns: **a zone is exactly as tall as its cards, and no zone is stretched to match
+another.** That is what the vertical stack already gives. What is lost is density —
+twelve zones means twelve full-width blocks and more scrolling than the sketches
+imply.
+
+Zone headers stay aligned left, values stay right-aligned within a zone, and the
+instrument-panel character comes from the type scale, the rules and the signal
+colours rather than from the arrangement.
+
 ## What a zone contains
 
 **Header** — glyph, domain title, problem count for that domain. The header is the
@@ -88,6 +105,13 @@ System metrics (CPU / MEM / DISK) compact, with inline sparklines. A separate
 | `/` | search across all cards |
 | `r` | force refresh |
 | `1`…`9` | jump to domain |
+
+`capture_keys` in the manifest lists only `esc` and `r` today. The other rows are
+the design, not the build: a key is captured when there is something behind it, so
+that the panel never swallows a keystroke it will ignore. `esc` closes the panel
+directly; `r` sets `hub.cmd` to `refresh` and the collector does the work, because
+the panel is a subscriber and starting a poll belongs on the other side of that
+boundary.
 
 ## Rejected alternatives
 

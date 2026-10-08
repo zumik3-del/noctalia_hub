@@ -271,6 +271,9 @@ domains:
     stale_after_sec: 300
 
     cards:
+      # `result=error` is xyOps' own vocabulary for what the API calls
+      # `tags:_error`. That mapping is not derivable, so it stays here where it
+      # can be seen and updated. `{query}` is optional — see docs/03-config.md.
       - id: xyops-failed
         title: failed today
         glyph: alert-circle

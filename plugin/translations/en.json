@@ -1,0 +1,39 @@
+{
+  "fatal": {
+    "title": "hub.yaml could not be read"
+  },
+  "header": {
+    "cards": "{n} cards",
+    "errors": "{n} errors",
+    "loading": "loading…"
+  },
+  "panel": {
+    "hint_close": "esc ✕",
+    "name": "hub"
+  },
+  "settings": {
+    "compact": {
+      "description": "Show one glyph for the worst state instead of the full count row. The single dot when everything is nominal is not affected.",
+      "label": "Compact"
+    },
+    "glyph": {
+      "description": "Glyph shown in the bar while every card is nominal. Replaced by the state glyph as soon as something needs attention.",
+      "label": "Glyph"
+    }
+  },
+  "state": {
+    "down": "Down",
+    "ok": "OK",
+    "stale": "Stale",
+    "warn": "Warning"
+  },
+  "widget": {
+    "tooltip_cards": "Cards",
+    "tooltip_errors": "Errors"
+  },
+  "zone": {
+    "config": "config",
+    "empty": "no cards — see docs/03-config.md",
+    "no_domains": "No domains in hub.yaml. Every zone is a domain with cards in it."
+  }
+}

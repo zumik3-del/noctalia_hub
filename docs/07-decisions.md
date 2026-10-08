@@ -4,17 +4,42 @@ Decision log. Format: what was decided, why, what was rejected.
 
 ---
 
-## D1. Full-screen panel
+## D1. Full-screen panel, without `persistent`
 
 **Decision.** `width = "fill"`, `height = "fill"`, `placement = "floating"`,
-`keyboard_focus = "exclusive"`, `persistent = true`.
+`dismiss_on_outside_click = false`, `keyboard_focus = "exclusive"`. **Not**
+`persistent = true`.
 
 **Why.** The panel is opened to look, not to work in. Full screen separates it from
-the desktop — the feel of a separate space rather than another window. `persistent`
-keeps state between openings.
+the desktop — the feel of a separate space rather than another window.
 
-**Rejected.** `attached` to the bar — pins it to one monitor and loses meaning on
-multi-monitor setups.
+**`persistent` is not a preference, it is unavailable.** Noctalia rejects it
+together with exclusive keyboard focus, and this design needs the focus:
+
+```
+$ noctalia plugins lint plugin/
+  error  panel entry 'panel': persistent = true is incompatible with keyboard_focus = "exclusive"
+```
+
+It also requires `placement = "floating"` and `dismiss_on_outside_click = false`,
+and `keyboard_focus = "none"` requires `dismiss_on_outside_click = false` too. The
+choice is therefore between `persistent` and exclusive focus, and the keyboard
+wins: `return`, `/`, `r` and `1`…`9` are the whole navigation model (see
+[02](02-layout.md)), and `capture_keys` only delivers to an entry holding focus.
+
+**What is given up.** Panel state does not survive a close. That costs scroll
+position and the current selection between openings — for a live monitoring panel
+this is close to free, because everything on it is rebuilt from `noctalia.state`
+anyway and a stale scroll position would be wrong more often than helpful.
+
+**Rejected.**
+
+- *`attached` to the bar* — pins it to one monitor and loses meaning on
+  multi-monitor setups.
+- *`persistent` with `keyboard_focus = "on_demand"`* — the one combination that
+  keeps both. Rejected because on-demand focus means keys are captured only while
+  the panel holds focus, and the keyboard model stops being reliable exactly where
+  it matters: inside the search field.
 
 ---
 
