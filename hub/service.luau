@@ -13,8 +13,11 @@
   specification this implements.
 ]]
 
-local Config = require("config")
-local Pipeline = require("pipeline")
+-- The extension is part of the path, not a detail: Noctalia's module loader
+-- refuses a require that is not relative and does not end in .luau, and the
+-- failure surfaces as "call to 'chunk' failed" with no mention of the module.
+local Config = require("./config.luau")
+local Pipeline = require("./pipeline.luau")
 
 noctalia.setUpdateInterval(1000)
 
