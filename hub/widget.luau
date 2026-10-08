@@ -80,6 +80,13 @@ local function renderWorst(worst)
   return ui.glyph({ name = signal.glyph, size = 14, color = signal.color })
 end
 
+--- Same reason as the panel's glyphLabel: a count next to a dot is a glyph and a
+--- label in one row, and the host anchors the two on different vertical centres.
+local function glyphLabel(props)
+  props.baseline = "pictographic"
+  return ui.label(props)
+end
+
 local function renderCounts(glyph)
   local children = { ui.glyph({ name = glyph, size = 14, color = "secondary" }) }
 
@@ -87,7 +94,7 @@ local function renderCounts(glyph)
     local count = summary[state]
     if count ~= nil and count > 0 then
       local signal = SIGNAL[state]
-      children[#children + 1] = ui.label({
+      children[#children + 1] = glyphLabel({
         text = " " .. tostring(count),
         fontSize = 12,
         color = signal.color,

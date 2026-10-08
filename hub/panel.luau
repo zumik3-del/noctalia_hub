@@ -58,6 +58,23 @@ local KIND_GLYPH = {
 local SECONDARY = "on_surface_variant"
 local DIMMED = "on_surface_variant/0.6"
 
+--- A label that shares a row with a glyph.
+---
+--- The host anchors an icon font at the ink top and a text label at the text
+--- baseline. In a row that centres its children, the two therefore sit on
+--- different vertical centres: the icon's ink is high in its box, the text's ink is
+--- low in its box, and the pair reads as crooked even though both are "centred".
+--- `pictographic` centres the label's ink instead of aligning its baseline, which
+--- is the alignment a glyph expects.
+---
+--- Only where a glyph is actually in the row. On a label that stands alone the same
+--- setting centres the x-height rather than the line, and a column of plain text
+--- starts to drift.
+local function glyphLabel(props)
+  props.baseline = "pictographic"
+  return ui.label(props)
+end
+
 --- Density is a layout decision. A 4K screen with few zones needs the taller row
 --- more than it needs a bigger number.
 local DENSITY = {
@@ -152,7 +169,7 @@ local function renderCard(card, record, sizes, index)
       size = size + 2,
       color = SECONDARY,
     }),
-    ui.label({
+    glyphLabel({
       text = card.title or card.id or "—",
       fontSize = size,
       color = "on_surface",
@@ -161,7 +178,7 @@ local function renderCard(card, record, sizes, index)
     -- The value is pushed to the trailing edge: a column of numbers has to read
     -- as a scale, and a scale needs a shared edge (docs/02-layout.md).
     ui.spacer({ flexGrow = 1 }),
-    ui.label({
+    glyphLabel({
       text = (record.text ~= nil and record.text ~= "") and record.text or "—",
       fontSize = size,
       fontWeight = "medium",
@@ -218,7 +235,7 @@ end
 local function renderZoneHeader(glyph, title, problems, size)
   local children = {
     ui.glyph({ name = glyph or "layout-columns", size = size + 1, color = DIMMED }),
-    ui.label({
+    glyphLabel({
       text = string.upper(title or ""),
       fontSize = size,
       fontWeight = "semibold",
@@ -228,7 +245,7 @@ local function renderZoneHeader(glyph, title, problems, size)
   }
 
   if problems > 0 then
-    children[#children + 1] = ui.label({
+    children[#children + 1] = glyphLabel({
       text = tostring(problems),
       fontSize = size,
       fontWeight = "semibold",
@@ -321,7 +338,7 @@ local function renderStatusLine(size)
 
   return ui.row({ gap = 4, align = "center" }, {
     ui.glyph({ name = broken and "alert-triangle" or "circle-check", size = size + 1, color = broken and "error" or "primary" }),
-    ui.label({ text = text, fontSize = size - 1, color = broken and "error" or SECONDARY, maxLines = 1 }),
+    glyphLabel({ text = text, fontSize = size - 1, color = broken and "error" or SECONDARY, maxLines = 1 }),
   })
 end
 
@@ -344,7 +361,7 @@ end
 local function renderHeader(size, zonePadding)
   local left = {
     ui.glyph({ name = "gauge", size = size + 3, color = "primary" }),
-    ui.label({
+    glyphLabel({
       text = string.upper(noctalia.tr("panel.name")),
       fontSize = size + 2,
       fontWeight = "bold",
@@ -359,11 +376,11 @@ local function renderHeader(size, zonePadding)
 
   local right = {
     ui.glyph({ name = "clock", size = size, color = DIMMED }),
-    ui.label({ text = clock, fontSize = size - 1, color = SECONDARY, maxLines = 1 }),
+    glyphLabel({ text = clock, fontSize = size - 1, color = SECONDARY, maxLines = 1 }),
     ui.spacer({ width = zonePadding }),
     renderStatusLine(size),
     ui.spacer({ width = zonePadding }),
-    ui.label({ text = noctalia.tr("panel.hint_close"), fontSize = size - 1, color = DIMMED, maxLines = 1 }),
+    glyphLabel({ text = noctalia.tr("panel.hint_close"), fontSize = size - 1, color = DIMMED, maxLines = 1 }),
   }
 
   return ui.column({ gap = 0, paddingH = zonePadding, paddingV = zonePadding }, {
