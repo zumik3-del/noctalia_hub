@@ -266,6 +266,46 @@ The full-screen panel is a supported case rather than a hack: v5 handles
 There is no `persistent = true`, because Noctalia rejects it alongside exclusive
 keyboard focus — see [D1](07-decisions.md).
 
+The plugin directory is named `hub/`, after the second segment of `id`. Noctalia
+resolves a plugin at `<source>/<segment>/` and reads its manifest from
+`<source>/<segment>/plugin.toml`, so the directory is not free. A mismatch is
+reported as `parse error: File could not be opened for reading` — a TOML error
+that names no file, and which arrives *after* the catalog row listed the plugin
+without complaint.
+
+The bar widget's id in `settings.json` is `plugin:<plugin-id>:<widget-entry-id>`,
+so `plugin:zumik3-del/hub:summary`. The plugin does not add its own widget to the
+bar; a card that is absent from the bar is a user layout decision, not a plugin
+bug, and a plugin that wrote `settings.json` would fight the bar's own editor.
+
+### Host rules that the type definitions do not state
+
+None of these are in `noctalia.d.luau`. All four were found by loading the plugin
+into a running shell, and three of them pass `noctalia plugins lint` and an
+offline harness unchanged.
+
+| Rule | What it costs to get it wrong |
+|---|---|
+| `require` must be relative **and** end in `.luau` | `call to 'chunk' failed: require path must be relative and end in .luau` — no module named |
+| A glyph name must exist in the host's font | Nothing. `ui.glyph` draws empty, the card keeps its title, and the only trace is one log line per redraw |
+| `setText` / `setGlyph` / `setImage` are inert while a `render()` tree is active | A ticking clock cannot be patched into one label; the tree is rebuilt per tick |
+| A bar widget cannot host `ui` controls | `ui.input`, `ui.select` and `ui.scroll` are skipped in the bar, silently |
+
+The glyph vocabulary is
+`/usr/share/noctalia/assets/fonts/noctalia-tabler.ttf` — 5941 names, a Tabler
+subset that moves with the shell. The plugin does not carry a copy and does not
+validate glyph names at load time: a baked list would be wrong after every host
+update, and the API has no way to ask whether a name exists. The check belongs
+next to the host, so it is `grep 'missing glyph' ~/.cache/noctalia/noctalia.log`
+rather than code.
+
+The third row is why `panel.setWantsSecondTicks(true)` costs a full rebuild every
+second instead of one label update. That is the price of a declarative tree, and
+it is the right trade at fourteen cards: the alternative is mixing the imperative
+and declarative models inside one panel.
+
+
+
 `capture_keys` lists only what the panel answers today. Capturing a key the panel
 cannot honour takes it away from every other surface, so `return`, `/` and `?` are
 added with the features behind them rather than reserved up front.
@@ -338,6 +378,39 @@ belongs in a pre-commit hook.
 
 Runtime verification is manual: editing `hub.yaml` must take effect without
 restarting the shell.
+
+`lint` is not enough, and it is worth being blunt about why. It reads the manifest
+and greps the code; it never loads a module, never resolves a `require` and never
+asks the host to draw anything. Four defects got past it and past an offline
+harness that stubs `noctalia`: a `for` over an array used as an iterator, an
+`isArray` where `isTable` was meant, a discarded return value that left secrets
+unsubstituted, and a `require` path the host rejects. All four were caught in one
+session against a running shell. Anything the host enforces at load time is
+outside `lint`'s reach by construction, so the log is part of the test surface:
+
+```bash
+# the repo is loadable as a plugin source; a path source reads the working tree
+# directly, so edits hot-reload and nothing is copied
+noctalia msg plugins source add hub path "$PWD"
+noctalia msg plugins enable zumik3-del/hub
+noctalia msg panel-open zumik3-del/hub:panel
+
+grep -E 'missing glyph|\[ERR\] \[luau\]|\[plugins\]' ~/.cache/noctalia/noctalia.log
+```
+
+`~/.cache/noctalia/noctalia.log` runs at DEBUG and is the only place the host
+speaks. The load sequence of a healthy plugin is three lines —
+
+```
+[INF] [plugins] loaded plugin 'zumik3-del/hub' (3 entries) from …/hub
+[INF] [plugin-service] started service 'zumik3-del/hub:collector'
+```
+
+— and after that, silence. Silence is the expected steady state: the collector
+publishes only when a signature changes, so a healthy panel produces no log
+traffic at all. A `path` source is also what makes the loop bearable: the watcher
+the host installs on each entry re-runs the service on save, with no restart.
+
 
 ## What the skeleton does not render yet
 
