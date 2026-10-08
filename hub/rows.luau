@@ -45,6 +45,13 @@ local TITLE_STEP = 2             -- the title leads its line
 local VALUE_STEP = 1             -- the value sits just under it
 local TITLE_GAP = 3              -- between the title and its second line
 
+--- How much text a line of a card may take. A title wraps to two because a
+--- service can be called `Home Assistant`; everything else on the card is one
+--- line by design — a value, a description and a reason are each one fact, and a
+--- second line of any of them is a card asking for more room than the panel has.
+local TITLE_MAX_LINES = 2
+local ONE_LINE = 1
+
 local M = {}
 
 --- "from 14:02 · 3 attempts" — the line that makes a frozen reading honest. The
@@ -102,13 +109,13 @@ end
 --- reading with no age reads as a live one (docs/06-failure-modes.md).
 local function cardSecondLine(view, card, record, size)
   if type(card.description) == "string" and card.description ~= "" then
-    return ui.label({ text = card.description, fontSize = size, color = view.secondary, maxLines = 2 })
+    return ui.label({ text = card.description, fontSize = size, color = view.secondary, maxLines = TITLE_MAX_LINES })
   end
 
   if record.state == "stale" or record.attempts > 0 then
     local text = ageLine(record)
     if text ~= nil then
-      return ui.label({ text = text, fontSize = size, color = view.dimmed, maxLines = 1 })
+      return ui.label({ text = text, fontSize = size, color = view.dimmed, maxLines = ONE_LINE })
     end
   end
 
@@ -193,7 +200,7 @@ local function renderLinkCard(view, card, index)
         fontWeight = "bold",
         fontSize = size + TITLE_STEP,
         color = "on_surface",
-        maxLines = 1,
+        maxLines = ONE_LINE,
       }),
     }),
   }
@@ -204,7 +211,7 @@ local function renderLinkCard(view, card, index)
       fontSize = size,
       textAlign = "end",
       color = view.secondary,
-      maxLines = 1,
+      maxLines = ONE_LINE,
     })
   end
 
@@ -293,7 +300,7 @@ function M.renderCard(view, card, record, index)
       fontWeight = "bold",
       fontSize = size + TITLE_STEP,
       color = "on_surface",
-      maxLines = 2,
+      maxLines = TITLE_MAX_LINES,
     }),
   }
   local second = cardSecondLine(view, card, record, size)
@@ -325,7 +332,7 @@ function M.renderCard(view, card, record, index)
       fontSize = size - VALUE_STEP,
       textAlign = "end",
       color = stateColor,
-      maxLines = 1,
+      maxLines = ONE_LINE,
     })
   end
 

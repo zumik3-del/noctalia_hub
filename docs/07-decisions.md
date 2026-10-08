@@ -908,6 +908,60 @@ card may override it.
 
 ---
 
+## D29. One view layer, and no module holds state
+
+**Decision.** `hub/visual.luau` holds what both surfaces draw — the four signal
+roles plus `pending`, the glyph baseline alignment, the kind fallback glyphs, the
+card wrapper — and `hub/rows.luau` / `hub/zones.luau` hold the card and the zone.
+None of the three reads `noctalia.state` or the filesystem. Each takes a `view`
+built by the panel on every render: the density table, the layout helpers, the
+records table, the dispatcher. `hub/util.luau` holds the two type predicates the
+layers share, and the one placeholder glyph the collector publishes and the panel
+draws.
+
+**Why this shape.** The signal roles were written out twice — `STATE_COLOR` and
+`STATE_GLYPH` in the panel, `SIGNAL` in the bar — and the copies had already
+drifted, the bar missing `pending` that the panel had added for a card it had no
+record for. A role is one fact (a colour and a glyph), so it gets one address. The
+same argument moved `glyphLabel`, the card wrapper and its hover closure, the
+three-way walk over domains→cards→records, and the `isString` / `isNumber`
+definitions.
+
+**Why the modules take a `view` instead of holding one.** The panel's `doc` and
+`cards` are replaced by their watches. A module holding its own copy would hold the
+table from before the last watch fired and draw a reading the collector had already
+moved past — which is the failure D7 exists to prevent, arriving through a file
+that looks like it is only presentation. Handing the layout helpers over as
+functions is the same rule at a smaller scale: `doc.layout` is read once, at the
+moment of drawing.
+
+**Why hover state lives in visual.luau.** It is a render-time decision shared by
+both card shapes, and it needs a redraw when it changes. Modules cannot call into
+one another — the plugin's entries share no Lua memory, and only `noctalia.state`
+crosses that boundary — so the panel registers its `render()` with
+`Visual.setRedraw` and visual.luau calls that. The alternative, a hover flag passed
+down and back up through every row, is the shared state by another name.
+
+**Defaults live where the schema is validated.** `Config.DEFAULT_LAYOUT` and
+`Config.DEFAULT_MAX_ITEMS` are exported and read by the panel and the pipeline. A
+default written in the view as well as in the schema is the same number waiting to
+drift, and it drifts silently: the panel keeps drawing while the documentation
+describes something else. The collector's fatal path publishes its fallback
+document *with* `layout`, for the same reason.
+
+**Rejected.**
+
+- *A context module the panel sets once.* `View.layout = doc.layout` at load time
+  is the state this decision refuses: it goes stale the moment a watch fires.
+- *Modules reading `noctalia.state` directly.* It would put a second subscription
+  in every render file, and the layer rules in
+  [05-architecture](05-architecture.md) — the collector publishes, the view
+  subscribes — are what make a stale reading impossible to hide behind.
+- *Naming every literal in one file.* The numbers are named where they are used,
+  next to what they do. One table of magic numbers is a table nobody reads.
+
+---
+
 ## Resolved questions
 
 Earlier revisions carried these as open. Each is decided here; the reasoning is kept
