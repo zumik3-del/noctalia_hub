@@ -90,9 +90,13 @@ end
 local function renderCounts(glyph)
   local children = { ui.glyph({ name = glyph, size = 14, color = "secondary" }) }
 
+  -- Only what needs attention reaches the bar: a green count on a bar is
+  -- decoration, and the tooltip still carries the whole breakdown. So `ok` is
+  -- skipped here (and the whole row collapses to one dot when nothing is wrong,
+  -- in render() below).
   for _, state in ipairs(SIGNALS) do
     local count = summary[state]
-    if count ~= nil and count > 0 then
+    if state ~= "ok" and count ~= nil and count > 0 then
       local signal = SIGNAL[state]
       children[#children + 1] = glyphLabel({
         text = " " .. tostring(count),
