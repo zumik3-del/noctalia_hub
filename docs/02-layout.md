@@ -4,7 +4,8 @@ Chosen: **layout A, "instrument panel"** — zones grouped by domain.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ ⌂ HUB        PROXMOX · GITHUB · RELEASES        ◷ 14:32:07 ⚙ esc ✕    │
+│ ⌂ HUB        ✓ 24 cards · 2 errors         ◷ 14:32:07  ⟳  ✕          │
+│ ALL   PROXMOX   GITHUB   RELEASES                                        │
 ├────────────────┬──────────────────────────┬──────────────────────────────┤
 │ INFRASTRUCTURE │ RELEASES                  │ WATCHING                     │
 │                │                          │                              │
@@ -82,13 +83,21 @@ documentation.
 ## Header
 
 ```
-⌂ HUB        PROXMOX · GITHUB · RELEASES        ◷ 14:32:07 ⚙ esc ✕
+⌂ HUB        ✓ 24 cards · 2 errors        ◷ 14:32:07  ⟳  ✕
+ALL   PROXMOX   GITHUB   RELEASES
 ```
 
-- left: name and the list of active domains
-- right: clock
-- overall status: `✓ 24 cards · 2 errors` — always visible, so you know whether the panel can be trusted
-- hotkey hints: `esc` closes, `?` opens the shortcut overlay
+- left: name and the trust line, `✓ 24 cards · 2 errors` — always visible, so you
+  know whether the panel can be trusted
+- right: clock, a refresh button and a close button
+- below: a tab strip, `ALL` plus one tab per zone
+
+The zone list used to sit inline in the header (`PROXMOX · GITHUB · RELEASES`) and
+became the tab strip when the github-kanban menu framework landed
+([D24](07-decisions.md)). `ALL` is the default and is the whole instrument panel;
+each other tab narrows the body to one zone. A `pin: bottom` zone is background,
+so it keeps its place in the footer instead of getting a tab. `esc` and `r` still
+work from the keyboard; `?` opens the shortcut overlay once it exists.
 
 ## Footer
 

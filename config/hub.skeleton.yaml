@@ -18,10 +18,18 @@
 version: 1
 
 layout:
-  density: compact          # compact | comfortable
+  density: compact          # compact | standard | comfortable
   show_header: true
   clock: "%H:%M:%S"
   stale_badge: true
+  # Card-block framework (see docs/07-decisions.md, D24). Every field is optional;
+  # these are the defaults. Colour is never set here — only density and shape.
+  font_scale: 100           # 80..130, % applied to every text size
+  card_radius: 9            # 0..24 px, corner rounding of a card block
+  card_spacing: 8           # 0..32 px, gap between cards in a zone
+  card_border: subtle       # none | subtle | accent
+  card_background: tinted   # transparent | tinted | solid
+  hover_effect: background  # none | background | border
 
 defaults:
   interval_sec: 60

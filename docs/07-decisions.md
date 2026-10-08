@@ -692,6 +692,46 @@ is recorded rather than worked around with `sed`.
 
 ---
 
+## D24. The panel framework is ported from github-kanban
+
+**Decision.** The panel's card blocks, header menu, tab strip, font scale and
+density come from github-kanban (`shangshui0302/github-kanban`). The shape knobs
+live in `hub.yaml` under `layout:` — `font_scale`, `card_radius`, `card_spacing`,
+`card_border`, `card_background`, `hover_effect`, plus a third density value
+`standard` — and the panel moves to `placement = "attached"` with
+`open_near_click = true`.
+
+**Why.** github-kanban is a shipped, working Noctalia panel built on the same
+`ui.*` reconciler. Its framework — rounded tinted card blocks, a header with
+icon, title, status line, clock and refresh/close buttons, a tab strip, and a
+panel that slides out beside the widget that opened it — is the instrument-panel
+look this project is chasing, already paid for. Re-deriving the same paddings and
+radii would only reproduce the same numbers with more code.
+
+**Why the knobs go in `hub.yaml`, not the manifest.** The config is the product.
+A second settings surface in `plugin.toml` would split one visual decision across
+two files, and the manifest's `[[setting]]` entries belong to the *bar widget*,
+not the panel. Shape is config; colour stays the palette (D5).
+
+**Why `ALL` is the first tab.** docs/02 chose layout A (every zone visible) over
+layout C (tabs holding one view). Porting kanban's tab strip wholesale would
+reverse that. Keeping `ALL` as the default tab preserves the at-a-glance panel
+and makes the other tabs an added shortcut rather than a replacement. A pinned
+`pin: bottom` zone is background (D6), so it keeps the footer position and gets
+no tab.
+
+**Rejected.** Copying kanban's free-form colour settings
+(`heatmap_custom_level_*`) — colour is semantic only (D5, docs/04 §1). Copying
+its `appearance_*` keys into the manifest — see above. A hover effect that
+changes a reading — hover is presentation only.
+
+**Consequence.** Hover is wired on every card but no card has an `onClick` yet,
+so it is presentation without an action until step 6. `show_header` and
+`stale_badge` remain accepted, validated and unhonoured; porting the framework
+did not change that.
+
+---
+
 ## Resolved questions
 
 Earlier revisions carried these as open. Each is decided here; the reasoning is kept

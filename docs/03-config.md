@@ -69,10 +69,16 @@ the schema drifting into six mutually incompatible ways to extract a value.
 version: 1
 
 layout:
-  density: compact          # compact | comfortable
+  density: compact          # compact | standard | comfortable
   show_header: true
   clock: "%H:%M:%S"
   stale_badge: true
+  font_scale: 100           # 80..130, % applied to every text size
+  card_radius: 9            # 0..24 px
+  card_spacing: 8           # 0..32 px
+  card_border: subtle       # none | subtle | accent
+  card_background: tinted   # transparent | tinted | solid
+  hover_effect: background  # none | background | border
 
 defaults:
   interval_sec: 60
@@ -155,6 +161,27 @@ domains:
         thresholds: { warn: 80, critical: 95 }
         graph: 48
 ```
+
+## Layout fields
+
+| Field | Default | Description |
+|---|---|---|
+| `density` | `compact` | `compact`, `standard` or `comfortable`. Sets the base row height, padding and type size. |
+| `clock` | `"%H:%M:%S"` | `strftime` pattern for the header clock, redrawn every second. |
+| `font_scale` | `100` | `80`–`130`. Multiplier applied to every text size at render time. |
+| `card_radius` | `9` | `0`–`24` px. Corner rounding of a card block. |
+| `card_spacing` | `8` | `0`–`32` px. Gap between cards inside a zone. |
+| `card_border` | `subtle` | `none`, `subtle` or `accent`. Border of a card block. |
+| `card_background` | `tinted` | `transparent`, `tinted` or `solid`. Fill of a card block; always a theme role, never a colour. |
+| `hover_effect` | `background` | `none`, `background` or `border`. Response while the pointer is over a card. |
+| `show_header` | `true` | Accepted and validated, **not yet honoured** in this build (the header always draws). |
+| `stale_badge` | `true` | Accepted and validated, **not yet honoured** in this build (the age line always draws). |
+
+`density`, `font_scale`, `card_radius`, `card_spacing`, `card_border`,
+`card_background` and `hover_effect` are the card-block framework ported from
+github-kanban ([D24](07-decisions.md)). None of them names a colour: shape and
+density are config, colour is always the active Noctalia palette
+([04](04-visual-language.md) §1).
 
 ## Card fields
 

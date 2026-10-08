@@ -8,8 +8,10 @@
     "loading": "loading…"
   },
   "panel": {
-    "hint_close": "esc ✕",
-    "name": "hub"
+    "close": "Close",
+    "name": "hub",
+    "refresh": "Refresh",
+    "tab_all": "All"
   },
   "settings": {
     "compact": {

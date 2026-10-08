@@ -47,15 +47,16 @@ Small type, thin separators, minimal padding. A space station is cramped, not ai
 
 Switchable density:
 
-| | `compact` | `comfortable` |
-|---|---|---|
-| Row height | 22 | 30 |
-| Value size | 11 | 13 |
-| Zone padding | 8 | 14 |
-| For | 1080p, many cards | 4K, few cards |
+| | `compact` | `standard` | `comfortable` |
+|---|---|---|---|
+| Value size | 11 | 12 | 13 |
+| Zone padding | 8 | 11 | 14 |
+| For | 1080p, many cards | default balance | 4K, few cards |
 
 Default is `compact`. At 4K with many zones `comfortable` reads noticeably
-better, which is why the switch has to exist.
+better, which is why the switch has to exist. `font_scale` in `layout:`
+multiplies every size on top of the chosen density, so a high-DPI screen can
+scale type without also loosening the spacing.
 
 ## 4. Restrained motion
 
@@ -85,6 +86,31 @@ through instruments should not have to step over normal readings to reach a fail
 `✓ 24 cards · 2 errors` in the header. Not decoration: the panel reports whether it
 can be trusted. If a source is quietly returning garbage, that must be visible
 immediately.
+
+## 7. Card blocks and the header menu
+
+The card-block framework comes from github-kanban ([D24](07-decisions.md)): each
+card is a rounded block with a tinted fill, an optional border, and a lighter
+fill while the pointer is over it. The `layout:` keys pick the **shape** —
+`card_radius`, `card_spacing`, `card_border`, `card_background`, `hover_effect` —
+and the palette picks the **colour**. A lighter hover fill is a palette role with
+alpha, not a literal colour, so the theme still owns the result. Hover is
+presentation only: it never changes a reading or a state.
+
+The header is a menu, also from github-kanban:
+
+```
+⌂ HUB   ✓ 14 cards            ◷ 10:14  ⟳  ✕
+ALL   SERVICES   RELEASES   LINKS
+```
+
+- left: name and the always-visible trust line (`✓ 24 cards · 2 errors`, §6)
+- right: clock, a refresh button and a close button
+- below it, one tab per zone plus `ALL`
+
+`ALL` is the instrument-panel view — every zone stacked — and is the default, so
+the tab strip adds a menu without taking away the at-a-glance panel. A pinned
+`pin: bottom` zone is background and gets no tab; it stays in the footer.
 
 ## Rejected
 

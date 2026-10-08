@@ -248,9 +248,10 @@ id = "panel"
 entry = "panel.luau"
 width = 960
 height = 1080
-placement = "floating"
-position = "center_left"
-dismiss_on_outside_click = false
+placement = "attached"
+position = "auto"
+open_near_click = true
+dismiss_on_outside_click = true
 keyboard_focus = "exclusive"
 capture_keys = ["escape", "r"]
 
@@ -259,14 +260,21 @@ id = "collector"
 entry = "service.luau"
 ```
 
+`placement = "attached"` with `open_near_click = true` is the github-kanban panel
+behaviour ([D24](07-decisions.md)): the panel slides out beside the bar widget
+that opened it, and `position = "auto"` lets the host choose the side from the
+click. `dismiss_on_outside_click = true` makes it a popover; `esc` still closes it.
+
 `width` and `height` take a number of pixels or the word `"fill"` — nothing
 between. There is no percentage and no `"half"`, so "half the screen" is two
 numbers that have to be right for the display in question: 960x1080 is the left
 half of the 1920x1080 panel this was written on, and a different monitor means
 editing them. `"fill"` is the only relative form, and it means the whole screen.
 
-`position` takes `center`, `center_left`, `center_right`, `top_left`, `top_right`,
-`bottom_left`, `bottom_right` — **with underscores**. The settings schema spells
+`position` takes `auto`, `center`, `center_left`, `center_right`, `top_left`,
+`top_right`, `bottom_left`, `bottom_right` — **with underscores**. `auto` is the
+attached-panel default: the host picks the side from the click. The settings
+schema spells
 the same positions with dashes (`settings.plugins.panels.position` takes
 `center-left`), and the two spellings are not interchangeable: the manifest wants
 the underscore form. `position = "center-left"` parses, lints clean, and is

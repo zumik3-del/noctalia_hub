@@ -35,21 +35,23 @@ entry = "widget.luau"
 # keyboard_focus = "exclusive", and the keyboard-first panel needs the focus.
 # See docs/07-decisions.md (D1).
 #
+# `placement = "attached"` with `open_near_click` is the github-kanban panel
+# behaviour (D24): the panel slides out beside the bar widget that opened it
+# instead of appearing pinned to a screen half. `position = "auto"` lets the host
+# choose the side from the click.
+#
 # capture_keys lists only what the panel answers today. Capturing a key it cannot
 # honour takes that key away from every other surface, so "/" and "?" are added
 # when the search and the shortcut overlay exist.
 [[panel]]
 id = "panel"
 entry = "panel.luau"
-# Pixels, not a fraction: the manifest accepts a number or "fill", and nothing
-# between. 960x1080 is the left half of the 1920x1080 panel this was written on, so
-# a different monitor means editing these two numbers. There is no way to ask for
-# "half the screen" and have it follow the display.
 width = 960
 height = 1080
-placement = "floating"
-position = "center_left"
-dismiss_on_outside_click = false
+placement = "attached"
+position = "auto"
+open_near_click = true
+dismiss_on_outside_click = true
 keyboard_focus = "exclusive"
 capture_keys = ["escape", "r"]
 

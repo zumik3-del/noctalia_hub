@@ -40,6 +40,15 @@ local DEFAULT_LAYOUT = {
   showHeader = true,
   clock = "%H:%M:%S",
   staleBadge = true,
+  -- Card-block framework ported from github-kanban (D24). Density picks a base
+  -- row height and padding; these four are the taste layer on top of it, kept in
+  -- hub.yaml rather than the manifest because the config is the product.
+  fontScale = 100,
+  cardRadius = 9,
+  cardSpacing = 8,
+  cardBorder = "subtle",
+  cardBackground = "tinted",
+  hoverEffect = "background",
 }
 
 local DEFAULT_DEFAULTS = {
@@ -183,8 +192,8 @@ local function readLayout(raw, sink)
 
   local density = raw.density
   if density ~= nil then
-    if density ~= "compact" and density ~= "comfortable" then
-      sink.add("layout.density", "expected \"compact\" or \"comfortable\", got " .. string.format("%q", tostring(density)))
+    if density ~= "compact" and density ~= "standard" and density ~= "comfortable" then
+      sink.add("layout.density", "expected \"compact\", \"standard\" or \"comfortable\", got " .. string.format("%q", tostring(density)))
     else
       layout.density = density
     end
@@ -210,6 +219,40 @@ local function readLayout(raw, sink)
       layout.clock = clock
     end
   end
+
+  -- Appearance fields (D24). A number out of range is a config error rather than
+  -- a clamp: silently pinning `font_scale: 500` to 130 hides a typo the author
+  -- would want to see.
+  local function readRange(field, path, target, minimum, maximum)
+    if field == nil then
+      return
+    end
+    if not isNumber(field) or field < minimum or field > maximum then
+      sink.add(path, "expected a number between " .. tostring(minimum) .. " and " .. tostring(maximum) .. ", got " .. tostring(field))
+    else
+      layout[target] = field
+    end
+  end
+
+  local function readChoice(field, path, target, allowed)
+    if field == nil then
+      return
+    end
+    for _, value in ipairs(allowed) do
+      if field == value then
+        layout[target] = field
+        return
+      end
+    end
+    sink.add(path, "expected one of: " .. oneOf(allowed) .. ", got " .. string.format("%q", tostring(field)))
+  end
+
+  readRange(raw.font_scale, "layout.font_scale", "fontScale", 80, 130)
+  readRange(raw.card_radius, "layout.card_radius", "cardRadius", 0, 24)
+  readRange(raw.card_spacing, "layout.card_spacing", "cardSpacing", 0, 32)
+  readChoice(raw.card_border, "layout.card_border", "cardBorder", { "none", "subtle", "accent" })
+  readChoice(raw.card_background, "layout.card_background", "cardBackground", { "transparent", "tinted", "solid" })
+  readChoice(raw.hover_effect, "layout.hover_effect", "hoverEffect", { "none", "background", "border" })
 
   return layout
 end

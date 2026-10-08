@@ -4,8 +4,14 @@
 
   It subscribes to noctalia.state and builds a ui.* tree. It does not fetch, it
   does not parse, and it does not know that a reading came from an HTTP endpoint
-  or a shell command — a card is a row with a value and a state, and that is the
+  or a shell command — a card is a block with a value and a state, and that is the
   whole of what this file is allowed to assume.
+
+  The visual framework — card blocks with radius/fill/border/hover, the font
+  scale, the header menu and the tab strip — is ported from github-kanban
+  (shangshui0302/github-kanban), retuned to the semantic-colour and density rules
+  of docs/04-visual-language.md. The config keys that drive it live in
+  `layout:` (D24); nothing here invents a colour outside the palette.
 
   Layout, colour and density follow docs/02-layout.md and
   docs/04-visual-language.md. What is deliberately not here yet, and why, is at
@@ -24,10 +30,20 @@ local summary = nil
 local fatal = ""
 local clock = ""
 
+--- `all` is the instrument-panel view (every zone stacked); a domain id is a tab
+--- holding one zone. The default is `all` so the at-a-glance panel survives the
+--- tab strip rather than being replaced by it (D24).
+local activeTab = "all"
+
+--- The card block under the pointer, by key. Hover is a render-time decision, so
+--- it lives with the other view state and never crosses to the collector.
+local hovered = nil
+
 -- ── visual language (docs/04-visual-language.md) ─────────────────────────────
 
 --- Colour is semantic only: four signal roles. No free-form colour exists in the
---- config and none is invented here (D5).
+--- config and none is invented here (D5). A card block's fill and border are
+--- palette roles with alpha, never literal colours.
 local STATE_COLOR = {
   ok = "primary",
   warn = "secondary",
@@ -76,17 +92,71 @@ local function glyphLabel(props)
 end
 
 --- Density is a layout decision. A 4K screen with few zones needs the taller row
---- more than it needs a bigger number.
+--- more than it needs a bigger number. `compact` is the instrument-panel default;
+--- `standard` and `comfortable` trade scrolling for legibility.
 local DENSITY = {
-  compact = { rowHeight = 22, valueSize = 11, zoneGap = 12, zonePadding = 8, rowGap = 4 },
-  comfortable = { rowHeight = 30, valueSize = 13, zoneGap = 16, zonePadding = 14, rowGap = 6 },
+  compact = { valueSize = 11, zoneGap = 12, zonePadding = 8, rowGap = 4, cardPadH = 8, cardPadV = 5 },
+  standard = { valueSize = 12, zoneGap = 14, zonePadding = 11, rowGap = 5, cardPadH = 10, cardPadV = 7 },
+  comfortable = { valueSize = 13, zoneGap = 16, zonePadding = 14, rowGap = 6, cardPadH = 12, cardPadV = 9 },
 }
 
-local function style()
-  if doc ~= nil and doc.layout ~= nil and DENSITY[doc.layout.density] ~= nil then
-    return DENSITY[doc.layout.density]
+local function layoutConf()
+  if doc ~= nil and type(doc.layout) == "table" then
+    return doc.layout
   end
-  return DENSITY.compact
+  return {}
+end
+
+--- `font_scale` is applied to every text size at render time. Keeping it a
+--- multiplier over the density base — rather than a second set of literal sizes —
+--- is what stops the two from disagreeing (D24).
+local function fontSize(size)
+  local scale = tonumber(layoutConf().fontScale) or 100
+  scale = math.max(80, math.min(130, scale))
+  return math.floor(size * scale / 100 + 0.5)
+end
+
+local function style()
+  return DENSITY[layoutConf().density] or DENSITY.compact
+end
+
+local function cardRadius()
+  local value = tonumber(layoutConf().cardRadius)
+  if value ~= nil then return value end
+  return 9
+end
+
+local function cardSpacing()
+  local value = tonumber(layoutConf().cardSpacing)
+  if value ~= nil then return value end
+  return 8
+end
+
+--- A card's fill is one of three theme states, never a colour. `tinted` and
+--- `solid` are palette roles with alpha, resolved live against the active theme.
+local function cardFill()
+  local mode = layoutConf().cardBackground or "tinted"
+  if mode == "transparent" then return "transparent" end
+  if mode == "solid" then return "surface/0.68" end
+  return "surface_variant/0.38"
+end
+
+--- The hover highlight. One step brighter than `tinted`, still a palette role, so
+--- the theme keeps control of the actual colour (docs/04 §1).
+local function hoverFill()
+  return "surface_variant/0.62"
+end
+
+--- border, borderWidth. A hovered card claims the accent border only when the
+--- config asked for a border response; the state colour stays on the value and
+--- the status glyph, so a warning is never mistaken for a hover (D5, D24).
+local function cardBorder(active)
+  local mode = layoutConf().cardBorder or "subtle"
+  local hover = layoutConf().hoverEffect or "background"
+  if mode == "none" then return "outline/0", 0 end
+  if active and hover == "border" then return "primary", 1 end
+  if mode == "accent" then return "primary", 1 end
+  return "outline/0.6", 1
 end
 
 local function clockPattern()
@@ -151,27 +221,34 @@ local function cardSecondLine(card, record, size)
   return nil
 end
 
+--- One card, drawn as a block: rounded, filled, optionally bordered, and lighter
+--- under the pointer. The block is the framework ported from github-kanban; the
+--- contents are still the instrument row
+---
+---     [glyph] title ......... value [status]
+---
+--- that docs/02-layout.md fixes. The value stays right-aligned: a column of
+--- numbers has to read as a scale.
+---
 --- `sizes` is the density table, not a font size: a card needs both a font size
---- and a row height, and passing two numbers around invites swapping them.
---- `index` is only there to name a card that has no id — a card missing one is
---- already a config error, but it still has to draw without colliding with
---- another card missing one.
+--- and padding, and passing two numbers around invites swapping them. `index` is
+--- only there to name a card that has no id — a card missing one is already a
+--- config error, but it still has to draw without colliding with another card
+--- missing one.
 local function renderCard(card, record, sizes, index)
-  local size = sizes.valueSize
+  local size = fontSize(sizes.valueSize)
   -- A card the collector has no record for: it failed validation before it could
   -- be given one. The shape has to be complete, because every field below is read
   -- unconditionally.
   record = record or { state = "pending", text = "", attempts = 0, rowCount = 0 }
 
+  local key = "card:" .. (card.id or ("unnamed-" .. tostring(index)))
+  local active = hovered == key
+  local border, borderWidth = cardBorder(active)
+
   -- The card's own line is a row, and it has to be: the five children below are a
   -- horizontal arrangement by construction, and the spacer with flexGrow exists to
-  -- push the value to the trailing edge — which only means anything in a row. In a
-  -- column it grows vertically and the value sits under the title instead of
-  -- against the right edge, so a column of numbers stops reading as a scale
-  -- (docs/02-layout.md).
-  --
-  -- The card itself stays a column, because a card with a second line stacks that
-  -- line under the row rather than beside it.
+  -- push the value to the trailing edge — which only means anything in a row.
   local row = ui.row({ gap = 6, align = "center" }, {
     ui.glyph({
       name = card.glyph or KIND_GLYPH[card.kind] or "activity",
@@ -209,10 +286,21 @@ local function renderCard(card, record, sizes, index)
   end
 
   return ui.column({
-    key = "card:" .. (card.id or ("unnamed-" .. tostring(index))),
+    key = key,
     gap = 0,
-    height = second ~= nil and nil or sizes.rowHeight,
-    justify = "center",
+    paddingH = sizes.cardPadH,
+    paddingV = sizes.cardPadV,
+    radius = cardRadius(),
+    fill = active and hoverFill() or cardFill(),
+    border = border,
+    borderWidth = borderWidth,
+    onHover = function(value)
+      local nextHovered = value == "true" and key or nil
+      if nextHovered ~= hovered then
+        hovered = nextHovered
+        render()
+      end
+    end,
   }, children)
 end
 
@@ -269,14 +357,14 @@ local function renderZoneHeader(glyph, title, problems, size)
 end
 
 local function renderZone(domain, sizes, rowGap, zonePadding)
-  local size = sizes.valueSize
+  local size = fontSize(sizes.valueSize)
   local children = { renderZoneHeader(domain.glyph, domain.title or domain.id, zoneProblemCount(domain), size) }
 
   local visible = 0
   for index, card in ipairs(domain.cards) do
     if card.hidden ~= true then
       visible = visible + 1
-      children[#children + 1] = ui.spacer({ height = rowGap })
+      children[#children + 1] = ui.spacer({ height = cardSpacing() })
       children[#children + 1] = renderCard(card, cards[card.id], sizes, index)
     end
   end
@@ -313,7 +401,7 @@ local function renderConfigErrors(sizes, zonePadding)
     return nil
   end
 
-  local size = sizes.valueSize
+  local size = fontSize(sizes.valueSize)
   local children = {
     renderZoneHeader("file-alert", noctalia.tr("zone.config"), #(doc.errors), size),
   }
@@ -351,20 +439,54 @@ local function renderStatusLine(size)
   })
 end
 
-local function renderDomainTitles(size)
+--- The zone names moved out of the header line and into this strip: one button
+--- per domain, plus `ALL`, which is the whole stack. Selected buttons take the
+--- primary variant, the rest are ghost — the same tab vocabulary as
+--- github-kanban's dashboard strip.
+local function renderTabs(size)
   local children = {}
-  for _, domain in ipairs(doc.domains or {}) do
-    if #children > 0 then
-      children[#children + 1] = ui.label({ text = "·", fontSize = size - 1, color = DIMMED })
-    end
-    children[#children + 1] = ui.label({
-      text = string.upper(domain.title or domain.id or ""),
-      fontSize = size - 1,
-      color = DIMMED,
-      maxLines = 1,
+
+  local function tab(id, title, glyph)
+    local active = activeTab == id
+    children[#children + 1] = ui.button({
+      text = string.upper(title),
+      glyph = glyph,
+      controlSize = "sm",
+      variant = active and "primary" or "ghost",
+      selected = active,
+      onClick = function()
+        activeTab = id
+        hovered = nil
+        render()
+      end,
     })
   end
-  return ui.row({ gap = 4, align = "center" }, children)
+
+  tab("all", noctalia.tr("panel.tab_all"), "layout-dashboard")
+  for _, domain in ipairs(doc.domains or {}) do
+    -- The pinned footer is background, not a destination: it is always visible
+    -- and needs no tab.
+    if domain.pin ~= "bottom" then
+      tab(domain.id or "?", domain.title or domain.id or "?", domain.glyph)
+    end
+  end
+
+  return ui.row({ gap = 3, align = "center" }, children)
+end
+
+--- The active tab can outlive the domain it named — a config edit removes or
+--- renames a zone. Falling back to `all` is the honest recovery: the panel keeps
+--- showing every zone instead of an empty body.
+local function ensureTab()
+  if activeTab == "all" then
+    return
+  end
+  for _, domain in ipairs(doc.domains or {}) do
+    if domain.id == activeTab then
+      return
+    end
+  end
+  activeTab = "all"
 end
 
 local function renderHeader(size, zonePadding)
@@ -377,19 +499,35 @@ local function renderHeader(size, zonePadding)
       color = "primary",
       maxLines = 1,
     }),
+    ui.spacer({ width = zonePadding }),
+    renderStatusLine(size),
   }
-  if #(doc.domains or {}) > 0 then
-    left[#left + 1] = ui.spacer({ width = zonePadding * 2 })
-    left[#left + 1] = renderDomainTitles(size)
-  end
 
+  -- Refresh and close are buttons now, not text hints: the header menu of
+  -- github-kanban. Refresh still goes through `hub.cmd` because starting a poll
+  -- belongs on the collector's side of the boundary (docs/05-architecture.md).
   local right = {
     ui.glyph({ name = "clock", size = size, color = DIMMED }),
     glyphLabel({ text = clock, fontSize = size - 1, color = SECONDARY, maxLines = 1 }),
     ui.spacer({ width = zonePadding }),
-    renderStatusLine(size),
-    ui.spacer({ width = zonePadding }),
-    glyphLabel({ text = noctalia.tr("panel.hint_close"), fontSize = size - 1, color = DIMMED, maxLines = 1 }),
+    ui.button({
+      glyph = "refresh",
+      variant = "ghost",
+      controlSize = "sm",
+      tooltip = noctalia.tr("panel.refresh"),
+      onClick = function()
+        noctalia.state.set("hub.cmd", "refresh")
+      end,
+    }),
+    ui.button({
+      glyph = "close",
+      variant = "ghost",
+      controlSize = "sm",
+      tooltip = noctalia.tr("panel.close"),
+      onClick = function()
+        panel.close()
+      end,
+    }),
   }
 
   return ui.column({ gap = 0, paddingH = zonePadding, paddingV = zonePadding }, {
@@ -397,6 +535,8 @@ local function renderHeader(size, zonePadding)
       ui.row({ gap = 4, align = "center" }, left),
       ui.row({ gap = 4, align = "center" }, right),
     }),
+    ui.spacer({ height = 6 }),
+    renderTabs(size),
   })
 end
 
@@ -425,23 +565,26 @@ end
 -- ── render ───────────────────────────────────────────────────────────────────
 
 function render()
-  local size = style()
-  local zonePadding = size.zonePadding
+  local sizes = style()
+  local zonePadding = sizes.zonePadding
+  local size = fontSize(sizes.valueSize)
 
   if doc == nil then
-    panel.render(renderLoading(size.valueSize, zonePadding))
+    panel.render(renderLoading(size, zonePadding))
     return
   end
 
   if fatal ~= "" then
-    panel.render(renderFatal(size.valueSize, zonePadding))
+    panel.render(renderFatal(size, zonePadding))
     return
   end
+
+  ensureTab()
 
   local scrolling = {}
   local footer = nil
 
-  local configErrors = renderConfigErrors(size, zonePadding)
+  local configErrors = renderConfigErrors(sizes, zonePadding)
   if configErrors ~= nil then
     scrolling[#scrolling + 1] = configErrors
   end
@@ -450,23 +593,23 @@ function render()
     -- `pin: bottom` takes a zone out of the scrolling flow: it is background, and
     -- it must not push content around as its numbers change (D6).
     if domain.pin == "bottom" then
-      footer = renderZone(domain, size, size.rowGap, zonePadding)
-    else
-      scrolling[#scrolling + 1] = renderZone(domain, size, size.rowGap, zonePadding)
+      footer = renderZone(domain, sizes, sizes.rowGap, zonePadding)
+    elseif activeTab == "all" or activeTab == domain.id then
+      scrolling[#scrolling + 1] = renderZone(domain, sizes, sizes.rowGap, zonePadding)
     end
   end
 
   if #(scrolling) == 0 then
-    scrolling[1] = ui.column({ gap = size.rowGap, padding = zonePadding }, {
-      ui.label({ text = noctalia.tr("zone.no_domains"), fontSize = size.valueSize, color = DIMMED, maxLines = 2 }),
+    scrolling[1] = ui.column({ gap = sizes.rowGap, padding = zonePadding }, {
+      ui.label({ text = noctalia.tr("zone.no_domains"), fontSize = size, color = DIMMED, maxLines = 2 }),
     })
   end
 
   local main = {
-    renderHeader(size.valueSize, zonePadding),
+    renderHeader(size, zonePadding),
     ui.separator({ thickness = 1, color = DIMMED }),
     ui.scroll({ flexGrow = 1 }, {
-      ui.column({ gap = size.zoneGap }, scrolling),
+      ui.column({ gap = sizes.zoneGap }, scrolling),
     }),
   }
 
@@ -489,6 +632,7 @@ end
 
 function onOpen(_context)
   seed()
+  hovered = nil
 
   -- The clock is the only thing on screen that must not wait for data.
   panel.setWantsSecondTicks(true)
@@ -549,9 +693,10 @@ seed()
 -- Each of these is a build-order item, not a missing idea. Saying where it goes
 -- is more useful than leaving it to be rediscovered.
 --
---   actions (link / panel / run / control)  step 6. No row has an onClick yet,
+--   actions (link / panel / run / control)  step 6. No block has an onClick yet,
 --     which is also why `capture_keys` lists only "escape" and "r": capturing a
 --     key the panel cannot honour takes it away from every other surface.
+--     Hover is wired (it is presentation) but nothing activates.
 --   search ("/"), the "?" overlay, Return  land with step 6, when there is
 --     something for them to act on.
 --   sparklines (`graph:`)                   step 4. A graph with no history yet
@@ -559,7 +704,7 @@ seed()
 --   list expansion on Enter                 step 8. A list is the collapsed count
 --     for now, which is the whole of it while there is nothing to expand.
 --   console rows                            needs a stream source, step 3.
---   traversal down → warn → stale → ok      needs a selection model. Zones and
+--   traversal down → warn → stale → ok      needs a selection model. Tabs and
 --     rows render in YAML order, which is reading order for a human (D8 is about
 --     Tab order, not about what is drawn).
 --   the slow pulse on `down`                step 4, on panel.setNeedsFrameTick.
