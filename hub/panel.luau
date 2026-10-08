@@ -862,7 +862,10 @@ function render()
     main[#main + 1] = footer
   end
 
-  panel.render(ui.column({ key = "hub:panel", gap = 0 }, main))
+  -- `flexGrow` on the root is what makes the body scrollable: without it the
+  -- column sizes to its content, so `ui.scroll` inside gets an unbounded height
+  -- and has nothing to scroll against.
+  panel.render(ui.column({ key = "hub:panel", flexGrow = 1, gap = 0 }, main))
 end
 
 -- ── entry ────────────────────────────────────────────────────────────────────
