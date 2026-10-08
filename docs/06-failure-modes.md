@@ -112,6 +112,12 @@ Two classes of error are reported differently, and deliberately:
 A card that fails validation is not dropped from the panel — it renders with its
 error as a second line, next to the cards that are fine.
 
+None of this is permanent. The collector stats `hub.yaml` on its own tick and
+re-reads it when it changes, so fixing the file clears the error without a restart
+— and a config that was never there stops being fatal the moment it appears. The
+host has no file-watch API, which is why the watch is a stat rather than a
+subscription; see [05](05-architecture.md).
+
 ## One dead feed inside a merge
 
 A merged `feeds:` card survives a dead feed — the others still have entries, and

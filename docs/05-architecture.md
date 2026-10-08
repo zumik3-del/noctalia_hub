@@ -377,7 +377,9 @@ rules in the manifest table above. It exits 1 on an error-level problem, so it
 belongs in a pre-commit hook.
 
 Runtime verification is manual: editing `hub.yaml` must take effect without
-restarting the shell.
+restarting the shell. It does — the collector stats the config on its own tick,
+because the host has no file-watch API and `state.watch` fires on a state write,
+not on an edit.
 
 `lint` is not enough, and it is worth being blunt about why. It reads the manifest
 and greps the code; it never loads a module, never resolves a `require` and never
