@@ -1,7 +1,8 @@
 # noctalia_hub
 
-An instrument panel for [Noctalia](https://noctalia.dev) v5 — a full-screen control
-centre showing links, service status, metrics and release feeds.
+An instrument panel for [Noctalia](https://noctalia.dev) v5 — a control centre
+showing links, service status, metrics and release feeds on the left half of the
+monitor.
 
 > **Status: skeleton.** The plugin exists and opens; only `source: static` fetches.
 > `http`, `command`, `stream` and `rss` are validated and report themselves as
@@ -11,9 +12,9 @@ centre showing links, service status, metrics and release feeds.
 
 ## Idea
 
-The panel opens full-screen and reads like a spacecraft instrument panel: zones
-grouped by domain, one instrument per row, colour meaning state rather than
-decoration. No scrolling to find a number you came to read.
+The panel opens on the left half of the monitor and reads like a spacecraft
+instrument panel: zones grouped by domain, one instrument per row, colour meaning
+state rather than decoration.
 
 Where existing plugins cover a single concern — `bookmarks` is a link list,
 `systempulse` is metrics, `rss-feeds` is feeds — this puts all of it on one
@@ -62,7 +63,7 @@ noctalia_hub/
     ├── config.luau        # read and validate hub.yaml
     ├── pipeline.luau      # fetch → extract → map → format
     ├── service.luau       # collector: polls, publishes into noctalia.state
-    ├── panel.luau         # full-screen panel, a pure subscriber
+    ├── panel.luau         # panel, a pure subscriber
     ├── widget.luau        # compact bar summary
     └── translations/      # en.json
 ```

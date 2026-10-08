@@ -225,7 +225,7 @@ plugin_api = 32
 author = "zumik3-del"
 license = "MIT"
 icon = "gauge"
-description = "Full-screen instrument panel: service status, metrics, releases and links from one YAML file."
+description = "Instrument panel on the left half of the monitor: service status, metrics, releases and links from one YAML file."
 tags = ["bar", "panel", "service", "indicator", "utility", "system"]
 dependencies = ["yq"]
 
@@ -246,10 +246,10 @@ entry = "widget.luau"
 [[panel]]
 id = "panel"
 entry = "panel.luau"
-width = "fill"
-height = "fill"
+width = 960
+height = 1080
 placement = "floating"
-position = "center"
+position = "center_left"
 dismiss_on_outside_click = false
 keyboard_focus = "exclusive"
 capture_keys = ["escape", "r"]
@@ -259,9 +259,19 @@ id = "collector"
 entry = "service.luau"
 ```
 
-The full-screen panel is a supported case rather than a hack: v5 handles
-`width`/`height` `"fill"` with `placement = "floating"`, plus
-`dismiss_on_outside_click`, `keyboard_focus` and `capture_keys`.
+`width` and `height` take a number of pixels or the word `"fill"` — nothing
+between. There is no percentage and no `"half"`, so "half the screen" is two
+numbers that have to be right for the display in question: 960x1080 is the left
+half of the 1920x1080 panel this was written on, and a different monitor means
+editing them. `"fill"` is the only relative form, and it means the whole screen.
+
+`position` takes `center`, `center_left`, `center_right`, `top_left`, `top_right`,
+`bottom_left`, `bottom_right` — **with underscores**. The settings schema spells
+the same positions with dashes (`settings.plugins.panels.position` takes
+`center-left`), and the two spellings are not interchangeable: the manifest wants
+the underscore form. `position = "center-left"` parses, lints clean, and is
+silently ignored — the panel opens centred, which is the default anyway, so
+nothing looks wrong until someone asks for a side and does not get one.
 
 There is no `persistent = true`, because Noctalia rejects it alongside exclusive
 keyboard focus — see [D1](07-decisions.md).
@@ -290,6 +300,7 @@ offline harness unchanged.
 | A glyph name must exist in the host's font | Nothing. `ui.glyph` draws empty, the card keeps its title, and the only trace is one log line per redraw |
 | `setText` / `setGlyph` / `setImage` are inert while a `render()` tree is active | A ticking clock cannot be patched into one label; the tree is rebuilt per tick |
 | A bar widget cannot host `ui` controls | `ui.input`, `ui.select` and `ui.scroll` are skipped in the bar, silently |
+| A manifest `position` is spelled with underscores | `position = "center-left"` is accepted, lints clean, and ignored — the panel opens centred |
 
 The glyph vocabulary is
 `/usr/share/noctalia/assets/fonts/noctalia-tabler.ttf` — 5941 names, a Tabler

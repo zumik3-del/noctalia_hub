@@ -6,8 +6,8 @@ One screen showing everything you would otherwise think about separately: whethe
 infrastructure is alive, which services are down, what shipped recently, what state
 the repositories are in, and a jump to any of them.
 
-The panel opens full-screen and reads as a separate space rather than another
-window floating above the desktop.
+The panel opens on the left half of the monitor and reads as a separate space
+rather than another window floating above the desktop.
 
 ## Why not just a set of plugins
 
@@ -43,7 +43,7 @@ A GUI editor remains possible later (see [07-decisions](07-decisions.md)).
 
 **In:**
 
-- full-screen panel with zones grouped by domain
+- panel on the left half of the monitor, with zones grouped by domain
 - card kinds: status, metric, release, link, console, list
 - source types: HTTP, command, stream, RSS, static value
 - click actions: `link`, `link_template`, `deep_link`, `panel`, `run`

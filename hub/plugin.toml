@@ -41,10 +41,14 @@ entry = "widget.luau"
 [[panel]]
 id = "panel"
 entry = "panel.luau"
-width = "fill"
-height = "fill"
+# Pixels, not a fraction: the manifest accepts a number or "fill", and nothing
+# between. 960x1080 is the left half of the 1920x1080 panel this was written on, so
+# a different monitor means editing these two numbers. There is no way to ask for
+# "half the screen" and have it follow the display.
+width = 960
+height = 1080
 placement = "floating"
-position = "center"
+position = "center_left"
 dismiss_on_outside_click = false
 keyboard_focus = "exclusive"
 capture_keys = ["escape", "r"]
