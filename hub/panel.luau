@@ -24,14 +24,17 @@
   the bottom of this file.
 ]]
 
+--- Three requires, and none of them is a behaviour the panel delegates:
+---   config.luau  owns what an absent field is worth (DEFAULT_LAYOUT), and the
+---                view is not a second opinion on that. Its IO half is never
+---                reached from here — the panel reads the document the collector
+---                published, like everything else (docs/05-architecture.md).
+---   zones.luau   the zone and the config-errors block, taking a `view`.
+---   visual.luau  the roles, the glyph helpers, the card wrapper, and the hover
+---                state this panel registers its render() into.
 local Config = require("./config.luau")
 local Zones = require("./zones.luau")
 local Visual = require("./visual.luau")
-
---- Both requires are for constants, not for behaviour: Config.DEFAULT_LAYOUT is
---- where a field's absent value is decided, and the view is not a second opinion
---- on that. config.luau's IO half is never reached from here — the panel reads
---- the document the collector published, like everything else (docs/05).
 
 local STATE_CONFIG = "hub.config"
 local STATE_CARDS = "hub.cards"
@@ -93,6 +96,7 @@ local TAB_GAP = 3
 local HEADER_STEP = 1         -- a glyph above its line, a secondary line below
 local HEADER_TITLE_STEP = 2   -- the panel name above the base size
 local HEADER_GLYPH_STEP = 3   -- the gauge above the line it leads
+local HEADER_ROW_GAP = 4      -- between the parts of one header row
 
 --- Density is a layout decision. A 4K screen with few zones needs the taller row
 --- more than it needs a bigger number. `compact` is the instrument-panel default;
@@ -216,7 +220,7 @@ local function renderStatusLine(size)
     children[#children + 1] = Visual.glyphLabel({ text = "· " .. noctalia.tr("header.errors", { n = summary.errors }), fontSize = size - HEADER_STEP, color = "error", maxLines = 1 })
   end
 
-  return ui.row({ gap = 4, align = "center" }, children)
+  return ui.row({ gap = HEADER_ROW_GAP, align = "center" }, children)
 end
 
 --- The zone names moved out of the header line and into this strip: one button
@@ -312,8 +316,8 @@ local function renderHeader(size, zonePadding)
 
   return ui.column({ gap = 0, paddingH = zonePadding, paddingV = zonePadding }, {
     ui.row({ justify = "space_between", align = "center", gap = zonePadding }, {
-      ui.row({ gap = 4, align = "center" }, left),
-      ui.row({ gap = 4, align = "center" }, right),
+      ui.row({ gap = HEADER_ROW_GAP, align = "center" }, left),
+      ui.row({ gap = HEADER_ROW_GAP, align = "center" }, right),
     }),
     -- The strip sits under the header row with a fixed gap: it is chrome, not
     -- content, and it does not scale with the density of the cards below it.
