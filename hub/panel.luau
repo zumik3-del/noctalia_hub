@@ -13,10 +13,15 @@
   of docs/04-visual-language.md. The config keys that drive it live in
   `layout:` (D24); nothing here invents a colour outside the palette.
 
+  What the bar shares with this file — the four signal roles, the glyph baseline
+  and the card wrapper — is in visual.luau, not written out a second time here.
+
   Layout, colour and density follow docs/02-layout.md and
   docs/04-visual-language.md. What is deliberately not here yet, and why, is at
   the bottom of this file.
 ]]
+
+local Visual = require("./visual.luau")
 
 local STATE_CONFIG = "hub.config"
 local STATE_CARDS = "hub.cards"
@@ -37,9 +42,8 @@ local clock = ""
 local OVERVIEW = ""
 local activeTab = OVERVIEW
 
---- The card block under the pointer, by key. Hover is a render-time decision, so
---- it lives with the other view state and never crosses to the collector.
-local hovered = nil
+--- The card block under the pointer is held by visual.luau with the rest of the
+--- hover machinery: it is a render-time decision and both card shapes share it.
 
 --- Buttons ask the collector to act through the same channel refresh uses: the
 --- panel is a subscriber and never launches a process itself
@@ -53,56 +57,14 @@ local function dispatchAction(action, target)
 end
 
 -- ── visual language (docs/04-visual-language.md) ─────────────────────────────
-
---- Colour is semantic only: four signal roles. No free-form colour exists in the
---- config and none is invented here (D5). A card block's fill and border are
---- palette roles with alpha, never literal colours.
-local STATE_COLOR = {
-  ok = "primary",
-  warn = "secondary",
-  down = "error",
-  stale = "on_surface_variant",
-  pending = "on_surface_variant",
-}
-
-local STATE_GLYPH = {
-  ok = "circle-filled",
-  warn = "alert-circle",
-  down = "alert-triangle",
-  stale = "circle-dashed",
-  pending = "circle",
-}
-
---- A card without a glyph gets one from its kind, so a column of unadorned cards
---- still reads as instruments rather than as a word list.
-local KIND_GLYPH = {
-  status = "activity",
-  metric = "chart-line",
-  release = "tag",
-  link = "external-link",
-  console = "file-text",
-  list = "list",
-}
+---
+--- The roles, the glyph helpers and the card wrapper live in visual.luau, shared
+--- with the bar: one address for what a state looks like. What stays here is
+--- everything that depends on `doc.layout`, because the layout is config and the
+--- config is state.
 
 local SECONDARY = "on_surface_variant"
 local DIMMED = "on_surface_variant/0.6"
-
---- A label that shares a row with a glyph.
----
---- The host anchors an icon font at the ink top and a text label at the text
---- baseline. In a row that centres its children, the two therefore sit on
---- different vertical centres: the icon's ink is high in its box, the text's ink is
---- low in its box, and the pair reads as crooked even though both are "centred".
---- `pictographic` centres the label's ink instead of aligning its baseline, which
---- is the alignment a glyph expects.
----
---- Only where a glyph is actually in the row. On a label that stands alone the same
---- setting centres the x-height rather than the line, and a column of plain text
---- starts to drift.
-local function glyphLabel(props)
-  props.baseline = "pictographic"
-  return ui.label(props)
-end
 
 --- Density is a layout decision. A 4K screen with few zones needs the taller row
 --- more than it needs a bigger number. `compact` is the instrument-panel default;
@@ -301,7 +263,7 @@ local function renderLinkCard(card, sizes, index)
   -- screen, which is the one place a config error must not be able to hide. A
   -- card with no id still has a position, so both problems draw.
   local key = "card:" .. tostring(index)
-  local active = hovered == key
+  local active = Visual.isHovered(key)
   local border, borderWidth = cardBorder(active)
 
   local badge = size + 17
@@ -349,8 +311,9 @@ local function renderLinkCard(card, sizes, index)
     end
   end
 
-  return ui.row({
+  return Visual.cardShell({
     key = key,
+    children = children,
     gap = sizes.cardPadH,
     paddingH = sizes.cardPadH,
     paddingV = sizes.cardPadV,
@@ -358,16 +321,8 @@ local function renderLinkCard(card, sizes, index)
     fill = active and hoverFill() or cardFill(),
     border = border,
     borderWidth = borderWidth,
-    align = "center",
     onClick = onClick,
-    onHover = function(value)
-      local nextHovered = value == "true" and key or nil
-      if nextHovered ~= hovered then
-        hovered = nextHovered
-        render()
-      end
-    end,
-  }, children)
+  })
 end
 
 --- One card, drawn as the activity block of github-kanban (D25): a badge on the
@@ -404,11 +359,12 @@ local function renderCard(card, record, sizes, index)
   record = record or { state = "pending", text = "", attempts = 0, rowCount = 0 }
 
   local key = "card:" .. tostring(index)
-  local active = hovered == key
+  local active = Visual.isHovered(key)
   local border, borderWidth = cardBorder(active)
 
   local state = record.state or "pending"
-  local stateColor = STATE_COLOR[state] or SECONDARY
+  local role = Visual.STATE_ROLES[state] or Visual.STATE_ROLES.pending
+  local stateColor = role.color
   local value = (record.text ~= nil and record.text ~= "") and record.text or "—"
 
   local badge = size + 17
@@ -421,7 +377,7 @@ local function renderCard(card, record, sizes, index)
     justify = "center",
   }, {
     ui.glyph({
-      name = card.glyph or KIND_GLYPH[card.kind] or "activity",
+      name = card.glyph or Visual.KIND_GLYPH[card.kind] or "activity",
       size = size + 5,
       color = "primary",
     }),
@@ -446,7 +402,7 @@ local function renderCard(card, record, sizes, index)
   -- guarded against — a click on one cannot mean the other (D15, D26). Only
   -- `link` and `run` are drawn; `panel`, `deep_link` and `control` are still
   -- schema, not buttons.
-  local marker = ui.glyph({ name = STATE_GLYPH[state] or STATE_GLYPH.pending, size = size, color = stateColor })
+  local marker = ui.glyph({ name = role.glyph, size = size, color = stateColor })
   local problem = cardProblem(card, record)
   if problem ~= nil then
     -- `ui.box` is a leaf — it takes no children — so the dot that must keep its
@@ -511,8 +467,9 @@ local function renderCard(card, record, sizes, index)
     children[#children + 1] = node
   end
 
-  return ui.row({
+  return Visual.cardShell({
     key = key,
+    children = children,
     gap = sizes.cardPadH,
     paddingH = sizes.cardPadH,
     paddingV = sizes.cardPadV,
@@ -520,15 +477,7 @@ local function renderCard(card, record, sizes, index)
     fill = active and hoverFill() or cardFill(),
     border = border,
     borderWidth = borderWidth,
-    align = "center",
-    onHover = function(value)
-      local nextHovered = value == "true" and key or nil
-      if nextHovered ~= hovered then
-        hovered = nextHovered
-        render()
-      end
-    end,
-  }, children)
+  })
 end
 
 -- ── zones ────────────────────────────────────────────────────────────────────
@@ -573,7 +522,7 @@ end
 local function renderZoneHeader(glyph, title, problems, size)
   local children = {
     ui.glyph({ name = glyph or "layout-columns", size = size + 1, color = DIMMED }),
-    glyphLabel({
+    Visual.glyphLabel({
       text = string.upper(title or ""),
       fontSize = size,
       fontWeight = "semibold",
@@ -583,7 +532,7 @@ local function renderZoneHeader(glyph, title, problems, size)
   }
 
   if problems > 0 then
-    children[#children + 1] = glyphLabel({
+    children[#children + 1] = Visual.glyphLabel({
       text = tostring(problems),
       fontSize = size,
       fontWeight = "semibold",
@@ -673,7 +622,7 @@ local function renderStatusLine(size)
 
   local children = {
     ui.glyph({ name = broken and "alert-triangle" or "circle-check", size = size + 1, color = broken and "error" or "primary" }),
-    glyphLabel({ text = noctalia.tr("header.cards", { n = summary.total }), fontSize = size - 1, color = broken and "error" or SECONDARY, maxLines = 1 }),
+    Visual.glyphLabel({ text = noctalia.tr("header.cards", { n = summary.total }), fontSize = size - 1, color = broken and "error" or SECONDARY, maxLines = 1 }),
   }
 
   -- Warnings ride their own label so the count can be yellow without dragging
@@ -681,11 +630,11 @@ local function renderStatusLine(size)
   -- one, gathered on the header line (D28). Errors, when they exist, follow in
   -- red — a real failure is not the same attention as a pending package.
   if warned then
-    children[#children + 1] = glyphLabel({ text = "· " .. noctalia.tr("header.warn", { n = summary.warn }), fontSize = size - 1, color = STATE_COLOR.warn, maxLines = 1 })
+    children[#children + 1] = Visual.glyphLabel({ text = "· " .. noctalia.tr("header.warn", { n = summary.warn }), fontSize = size - 1, color = Visual.STATE_ROLES.warn.color, maxLines = 1 })
   end
 
   if broken then
-    children[#children + 1] = glyphLabel({ text = "· " .. noctalia.tr("header.errors", { n = summary.errors }), fontSize = size - 1, color = "error", maxLines = 1 })
+    children[#children + 1] = Visual.glyphLabel({ text = "· " .. noctalia.tr("header.errors", { n = summary.errors }), fontSize = size - 1, color = "error", maxLines = 1 })
   end
 
   return ui.row({ gap = 4, align = "center" }, children)
@@ -708,7 +657,7 @@ local function renderTabs(size)
       selected = active,
       onClick = function()
         activeTab = id
-        hovered = nil
+        Visual.clearHover()
         render()
       end,
     })
@@ -744,7 +693,7 @@ end
 local function renderHeader(size, zonePadding)
   local left = {
     ui.glyph({ name = "gauge", size = size + 3, color = "primary" }),
-    glyphLabel({
+    Visual.glyphLabel({
       text = string.upper(noctalia.tr("panel.name")),
       fontSize = size + 2,
       fontWeight = "bold",
@@ -760,7 +709,7 @@ local function renderHeader(size, zonePadding)
   -- belongs on the collector's side of the boundary (docs/05-architecture.md).
   local right = {
     ui.glyph({ name = "clock", size = size, color = DIMMED }),
-    glyphLabel({ text = clock, fontSize = size - 1, color = SECONDARY, maxLines = 1 }),
+    Visual.glyphLabel({ text = clock, fontSize = size - 1, color = SECONDARY, maxLines = 1 }),
     ui.spacer({ width = zonePadding }),
     ui.button({
       glyph = "refresh",
@@ -899,6 +848,11 @@ end
 
 -- ── entry ────────────────────────────────────────────────────────────────────
 
+--- visual.luau owns the hover state but cannot call back into another entry —
+--- there is no shared Lua memory between the plugin's files — so the panel hands
+--- it the one function it needs: how to redraw when the pointer moves.
+Visual.setRedraw(render)
+
 local function seed()
   doc = noctalia.state.get(STATE_CONFIG)
   cards = noctalia.state.get(STATE_CARDS) or {}
@@ -908,7 +862,7 @@ end
 
 function onOpen(_context)
   seed()
-  hovered = nil
+  Visual.clearHover()
 
   -- The clock is the only thing on screen that must not wait for data.
   panel.setWantsSecondTicks(true)

@@ -14,18 +14,11 @@
   correct behaviour (D20).
 ]]
 
+local Visual = require("./visual.luau")
+
 local STATE_SUMMARY = "hub.summary"
 
 local summary = nil
-
---- Same four signal roles as the panel. The bar has no per-widget colour override
---- layer, so a widget draws from the palette and nothing else (D21).
-local SIGNAL = {
-  ok = { glyph = "circle-filled", color = "primary" },
-  warn = { glyph = "alert-circle", color = "secondary" },
-  down = { glyph = "alert-triangle", color = "error" },
-  stale = { glyph = "circle-dashed", color = "on_surface_variant" },
-}
 
 --- Order is attention order, not alphabetical: the failure is the number you came
 --- for, so it is read first (D8).
@@ -33,14 +26,14 @@ local SIGNALS = { "down", "warn", "stale", "ok" }
 
 local isVertical = false
 
-local Tooltip = { shown = false }
+local tooltipShown = false
 
 local function hideTooltip()
   -- Clearing a tooltip that is not there crashes the plugin, so the widget
   -- remembers whether it ever showed one.
-  if Tooltip.shown then
+  if tooltipShown then
     barWidget.clearTooltip()
-    Tooltip.shown = false
+    tooltipShown = false
   end
 end
 
@@ -63,7 +56,7 @@ local function showTooltip()
   end
 
   barWidget.setTooltip(rows)
-  Tooltip.shown = true
+  tooltipShown = true
 end
 
 --- Nothing to report: one dot, and that is the entire widget. This holds in both
@@ -76,15 +69,8 @@ end
 --- One glyph for the worst state in the panel. This is the vertical-bar and
 --- compact rendering: the answer to "is anything wrong", without the shape of it.
 local function renderWorst(worst)
-  local signal = SIGNAL[worst]
-  return ui.glyph({ name = signal.glyph, size = 14, color = signal.color })
-end
-
---- Same reason as the panel's glyphLabel: a count next to a dot is a glyph and a
---- label in one row, and the host anchors the two on different vertical centres.
-local function glyphLabel(props)
-  props.baseline = "pictographic"
-  return ui.label(props)
+  local role = Visual.STATE_ROLES[worst] or Visual.STATE_ROLES.ok
+  return ui.glyph({ name = role.glyph, size = 14, color = role.color })
 end
 
 local function renderCounts(glyph)
@@ -97,15 +83,15 @@ local function renderCounts(glyph)
   for _, state in ipairs(SIGNALS) do
     local count = summary[state]
     if state ~= "ok" and count ~= nil and count > 0 then
-      local signal = SIGNAL[state]
-      children[#children + 1] = glyphLabel({
+      local role = Visual.STATE_ROLES[state]
+      children[#children + 1] = Visual.glyphLabel({
         text = " " .. tostring(count),
         fontSize = 12,
-        color = signal.color,
+        color = role.color,
         fontWeight = "medium",
         maxLines = 1,
       })
-      children[#children + 1] = ui.glyph({ name = signal.glyph, size = 8, color = signal.color })
+      children[#children + 1] = ui.glyph({ name = role.glyph, size = 8, color = role.color })
     end
   end
 

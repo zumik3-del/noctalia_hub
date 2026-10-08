@@ -8,6 +8,7 @@ hub/
 ├── service.luau         # background: collect data → noctalia.state
 ├── panel.luau           # panel, pure subscriber
 ├── widget.luau          # compact bar summary
+├── visual.luau          # signal roles, glyph helpers, the card wrapper
 ├── config.luau          # load and validate hub.yaml
 ├── pipeline.luau        # fetch → extract → map → format
 ├── .luaurc              # languageMode = nonstrict, matching the entry files
@@ -91,6 +92,25 @@ panel.render(tree)
 
 Builds a `ui.*` tree: zones in `ui.column`, rows in `ui.row`. It does not know where
 the data came from — it only renders what is in state.
+
+### visual.luau — what both surfaces draw
+
+The four signal roles (`ok` / `warn` / `down` / `stale`, plus `pending` as the
+absence of a reading), the glyph baseline alignment, the kind fallback glyphs and
+the card wrapper. Both `panel.luau` and `widget.luau` read from here: the roles
+were written out twice once already and the copies had drifted, the bar missing
+`pending` the panel had added.
+
+It holds no colour of its own beyond the roles, and reads nothing from the config.
+Fill, radius and border depend on `layout:`, which arrives as state, so the caller
+resolves them and hands them in — a module that took the layout as an argument
+would be a second place to keep in step with `config.luau`'s defaults.
+
+The hover state lives here too, with the panel's `render()` registered into it
+through `setRedraw`. Modules cannot call into one another — the plugin's entries
+share no Lua memory, and only `noctalia.state` crosses the boundary — so a
+redraw is something the panel hands over rather than something visual.luau can
+find for itself.
 
 ### widget.luau — the summary
 
