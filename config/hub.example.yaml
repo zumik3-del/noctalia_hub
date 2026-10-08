@@ -110,6 +110,10 @@ domains:
 
       # run: opens a terminal window — it does not embed one. The string is
       # passed to the shell verbatim and never interpolates source values.
+      #
+      # The host-level `updates` reading: one hop, no `pct`, the node's own
+      # packages. The same block on a container card adds `pct exec` (see the
+      # Pi-hole and Forgejo cards below); that is the whole of the difference.
       - id: pve-ssh
         title: pve.home.lan
         glyph: terminal
@@ -118,6 +122,12 @@ domains:
         source:
           type: command
           argv: ["ping", "-c", "1", "-W", "2", "pve.home.lan"]
+        updates:
+          interval_sec: 3600
+          source:
+            type: command
+            argv: ["ssh", "pve.home.lan", "sh -c 'apt-get update -qq >/dev/null || exit 1; apt-get -s -q upgrade | grep -c ^Inst || true'"]
+          run: "ssh -t pve.home.lan 'apt-get update && apt-get -y upgrade'"
 
       # kind: console is a read-only tail. No input, no PTY — see D13.
       - id: pve-journal
@@ -356,10 +366,19 @@ domains:
       # answers "is the host answering" without a token the REST API would need.
       # Any HTTP response counts — the redirect to Authelia is a live host, not a
       # failure. `-k` is for a self-signed certificate, which is not the question
-      # either. The two trailing buttons are the card's actions — one to the admin
-      # UI, one into the container. Both may sit on one card because each button
-      # has its own target (D26), and the hop is D17's ssh + pct exec, with `-t`
-      # so `pct enter` gets a TTY.
+      # either. A `kind: status` card draws only the dot, so there is no `format:`
+      # here to write "online" into (D27).
+      #
+      # The two trailing buttons are the card's actions — one to the admin UI, one
+      # into the container. Both may sit on one card because each button has its
+      # own target (D26), and the hop is D17's ssh + pct exec, with `-t` so `pct
+      # enter` gets a TTY.
+      #
+      # `updates` is the second reading: the container's pending OS packages, as a
+      # badge before the dot that is also the button which installs them. Debian's
+      # check is written out; the plugin does not guess apt from apk (D27). `sh -c`
+      # (not `sh -lc`) keeps the container's MOTD out of the output, and `|| true`
+      # keeps a zero count from reading as a failed command.
       - id: pihole
         title: Pi-hole
         glyph: shield-check
@@ -370,7 +389,12 @@ domains:
         source:
           type: command
           argv: ["curl", "-k", "-sS", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "3", "https://dns.home.lan/admin/"]
-        format: "online"
+        updates:
+          interval_sec: 3600
+          source:
+            type: command
+            argv: ["ssh", "pve.home.lan", "pct exec 100 -- sh -c 'apt-get update -qq >/dev/null || exit 1; apt-get -s -q upgrade | grep -c ^Inst || true'"]
+          run: "ssh -t pve.home.lan 'pct exec 100 -- sh -c \"apt-get update && apt-get -y upgrade\"'"
 
       # COUNT(DISTINCT domain), not COUNT(*). The gravity table's uniqueness is
       # enforced on the (domain, adlist_id) PAIR, not on domain alone — a domain
@@ -466,6 +490,28 @@ domains:
           extract: "[(.. | .host? // empty)] | flatten | length"
         format: "{n} hostnames"
         thresholds: { warn: 60, critical: 100 }
+
+      # --- Forgejo (Alpine) ---------------------------------------------------
+      # The same second reading on a different distribution. `apk version -l '<'`
+      # lists packages whose installed version is below the available one — with a
+      # header line — so the count greps for the `<` marker rather than counting
+      # lines, which would be off by one. The upgrade is Alpine's own; it may ask
+      # for a confirmation in the terminal, which is exactly why the action opens
+      # one.
+      - id: forgejo
+        title: Forgejo
+        glyph: git-fork
+        kind: status
+        description: Git hosting, on Alpine
+        link: https://code.home.lan
+        run: "ssh -t pve.home.lan 'pct enter 116'"
+        source: { type: static, value: "running" }
+        updates:
+          interval_sec: 3600
+          source:
+            type: command
+            argv: ["ssh", "pve.home.lan", "pct exec 116 -- sh -c 'apk update -q >/dev/null 2>&1 || exit 1; apk version -l \"<\" | grep -c \"<\" || true'"]
+          run: "ssh -t pve.home.lan 'pct exec 116 -- sh -c \"apk update && apk upgrade\"'"
 
 
   # ── Shell ─────────────────────────────────────────────────────────────────

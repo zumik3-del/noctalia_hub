@@ -66,7 +66,7 @@ only element present even when the domain is empty.
 ([D25](07-decisions.md)). Fixed structure:
 
 ```
-┌──┐  Title                      value  ●  ⇱  ⌨
+┌──┐  Title                    value  2  ●  ⇱  ⌨
 └──┘  Description
 ```
 
@@ -76,8 +76,12 @@ only element present even when the domain is empty.
 - description on the second line, dimmed; a failure does not displace it — the
   reason sits in the state marker's tooltip, so a red card still says what it
   measures and the reason waits one hover away on the dot ([D25](07-decisions.md))
-- value and status dot on the trailing edge, for the thing you actually came to
-  read
+- the reading and the state dot on the trailing edge, for the thing you actually
+  came to read. A `kind: status` card draws only its dot — the colour is the whole
+  message, so there is no value column ([D27](07-decisions.md))
+- the update badge, when the host has pending OS packages: a warn-coloured count
+  between the reading and the dot, which is also the button that installs them
+  ([D27](07-decisions.md))
 - action buttons after the dot: a link button opens the card's `link:` URL, a
   terminal button runs its `run:` command. Each button has its own target, so a
   card may carry both ([D26](07-decisions.md)); only those two are drawn in this

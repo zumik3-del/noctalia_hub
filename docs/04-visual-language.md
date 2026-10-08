@@ -100,7 +100,7 @@ presentation only: it never changes a reading or a state.
 Inside the block the layout is github-kanban's activity row ([D25](07-decisions.md)):
 
 ```
-┌──┐  Gateway                       running  ●
+┌──┐  Gateway                              2  ●
 └──┘  Keenetic, gateway and routing
 ```
 
@@ -109,6 +109,12 @@ the reading plus its state marker sit on the trailing edge. The title is
 `on_surface` bold, the description `on_surface_variant`, and only the value and
 the marker carry a signal colour (§1–2): the block never recolours the title to
 match the state.
+
+A `kind: status` card reads as the dot alone: the colour is the whole message and a
+word beside it was the same fact twice ([D27](07-decisions.md)). The `2` above is
+the card's **update badge** — the host's pending OS packages, in the attention
+colour, and the button that installs them. It is absent when there is nothing to
+say, so no host without updates carries a permanent zero.
 
 The header is a menu, also from github-kanban:
 

@@ -6,7 +6,8 @@ widget.
 
 > **Status: in progress.** The plugin exists and opens; `static` and `command`
 > sources fetch, and `link`/`run` actions are drawn as trailing buttons and
-> executed. `http`, `stream` and `rss` are validated and report themselves as
+> executed. A card may also carry an `updates` badge for its host's pending OS
+> packages. `http`, `stream` and `rss` are validated and report themselves as
 > unbuilt. The panel renders every zone, every card kind and every card state, so
 > what is missing is transport, not layout. See
 > [docs/05-architecture.md](docs/05-architecture.md) for the build order.
@@ -81,11 +82,11 @@ noctalia plugins lint hub/          # manifest vs code
 cp config/hub.skeleton.yaml ~/.config/noctalia/hub/hub.yaml
 ```
 
-`hub.skeleton.yaml` is the config this build renders end to end — every card uses
-`source: { type: static }`, so it needs no network, no shell and no container.
-`config/hub.example.yaml` is the real thing, with all five source types; on the
-skeleton build each of its cards reports itself as unbuilt rather than showing
-nothing.
+`hub.skeleton.yaml` is the config this build renders end to end. Most cards use
+`source: { type: static }`, which needs no network; the Pi-hole and Proxmox cards
+are real `command` cards and need the hosts they name. `config/hub.example.yaml`
+is the real thing, with all five source types; the ones this build does not fetch
+report themselves as unbuilt rather than showing nothing.
 
 Requires `yq` at runtime, for the one-time YAML→JSON conversion
 ([D2](docs/07-decisions.md)).

@@ -13,7 +13,9 @@
     "close": "Close",
     "name": "hub",
     "refresh": "Refresh",
-    "tab_overview": "Overview"
+    "tab_overview": "Overview",
+    "updates": "Install updates",
+    "updates_failed": "Update check failed"
   },
   "settings": {
     "compact": {

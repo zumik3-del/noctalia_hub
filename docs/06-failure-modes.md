@@ -28,6 +28,10 @@ failing card still says what it measures. The document-level block above the zon
 still lists every config error with its path; the tooltip is where the card's own
 reason waits.
 
+**A `kind: status` card has no value column** ([D27](07-decisions.md)): the dot's
+colour is the whole reading, so the Rendering column of the table above applies its
+"Value" to metric, release, link, console and list cards only.
+
 Staleness needs something to be stale about. A card that has **never** succeeded
 stays `down` indefinitely rather than aging into a dimmer `down`, because there is
 no reading for the age to qualify.
@@ -238,6 +242,26 @@ Not replaced with zero, not hidden:
 ```
 
 Zero is the more dangerous option here: `0 nodes` reads as the truth.
+
+## An update check that could not run
+
+A card's `updates` reading is a second reading, drawn as a badge: a warn-coloured
+count when the host has packages pending, and nothing at all when it does not.
+Those are two different facts, so a check that failed is a third — a dim red glyph
+whose tooltip carries the reason.
+
+```
+▸ Pi-hole                    ⚠  ●      ← hover the ⚠: ssh: connect to host ...
+```
+
+The card's own dot is untouched. A broken update check is not a broken Pi-hole, and
+letting one redden the other would report a fault the panel did not observe. The
+badge is the host's second reading, not the card's state, so it is also not counted
+in the header's error total ([D27](07-decisions.md)).
+
+The usual rule picks the state: a non-zero exit, a timeout, or output that is not a
+number is `down` with the tool's own text — never a zero the badge would draw as
+"no updates".
 
 ## Many cards, one dead hop
 

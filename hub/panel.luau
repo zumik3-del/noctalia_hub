@@ -249,6 +249,46 @@ local function cardSecondLine(card, record, size)
   return nil
 end
 
+--- The update badge: a card's second reading, drawn before the state dot. It is
+--- silent when there is nothing to say — no pending updates, or the check has not
+--- answered yet — a warn-coloured count when there are, and a dim red glyph when
+--- the check itself could not run (D27). "No updates" and "could not ask" are
+--- different facts, and the panel must not draw them the same.
+---
+--- The count is the button that installs them: one target, so it is a button and
+--- not a card-wide click (D26). The reason a failed check gives sits on the
+--- glyph's tooltip, the same place a failed reading explains itself.
+local function updatesBadge(card, record, size)
+  local updates = record.updates
+  if updates == nil then
+    return nil
+  end
+
+  if updates.state == "warn" then
+    local onUpgrade = nil
+    if card.updates ~= nil and card.updates.run ~= nil then
+      onUpgrade = function()
+        dispatchAction("run", card.updates.run)
+      end
+    end
+    return ui.button({
+      text = updates.text,
+      variant = "secondary",
+      controlSize = "sm",
+      tooltip = noctalia.tr("panel.updates"),
+      onClick = onUpgrade,
+    })
+  end
+
+  if updates.state == "down" then
+    return ui.row({ tooltip = updates.error or noctalia.tr("panel.updates_failed"), align = "center" }, {
+      ui.glyph({ name = "alert-triangle", size = size, color = "error/0.7" }),
+    })
+  end
+
+  return nil
+end
+
 --- One card, drawn as the activity block of github-kanban (D25): a badge on the
 --- left, a two-line column in the middle, and the reading plus its state marker on
 --- the right.
@@ -320,26 +360,37 @@ local function renderCard(card, record, sizes, index)
   -- guarded against — a click on one cannot mean the other (D15, D26). Only
   -- `link` and `run` are drawn; `panel`, `deep_link` and `control` are still
   -- schema, not buttons.
-  --
-  -- The marker carries the reason when there is one. `ui.glyph` takes no tooltip
-  -- (only wrappable types do), so the dot is wrapped in a box that does — this is
-  -- the node the colour already points at, which is where the explanation belongs.
   local marker = ui.glyph({ name = STATE_GLYPH[state] or STATE_GLYPH.pending, size = size, color = stateColor })
   local problem = cardProblem(card, record)
   if problem ~= nil then
-    marker = ui.box({ tooltip = problem }, { marker })
+    -- `ui.box` is a leaf — it takes no children — so the dot that must keep its
+    -- own colour is wrapped in a row, which does take a tooltip (docs/05 UI
+    -- primitives).
+    marker = ui.row({ tooltip = problem, align = "center" }, { marker })
   end
 
-  local trailing = {
-    ui.label({
+  -- A status card says everything with its dot: the value column is not drawn for
+  -- `kind: status` (D27). The dot's colour and its tooltip carry the state, and a
+  -- word beside it was the same fact twice.
+  local trailing = {}
+  if card.kind ~= "status" then
+    trailing[#trailing + 1] = ui.label({
       text = value,
       fontSize = size - 1,
       textAlign = "end",
       color = stateColor,
       maxLines = 1,
-    }),
-    marker,
-  }
+    })
+  end
+
+  -- The update count sits between the reading and the dot: it is a second reading
+  -- about the same host, and it belongs on the reading side of the card (D27).
+  local badge = updatesBadge(card, record, size)
+  if badge ~= nil then
+    trailing[#trailing + 1] = badge
+  end
+
+  trailing[#trailing + 1] = marker
 
   if card.actions ~= nil then
     if card.actions.link ~= nil then

@@ -53,6 +53,20 @@ end
 
 -- ── runtime records ──────────────────────────────────────────────────────────
 
+local function newUpdatesRecord(card)
+  if card.updates == nil then
+    return nil
+  end
+  return {
+    state = "pending",
+    text = "",
+    error = nil,
+    lastGoodAtMs = nil,
+    attempts = 0,
+    nextDueAtMs = 0,
+  }
+end
+
 local function newRecord(card)
   return {
     id = card.id,
@@ -68,6 +82,10 @@ local function newRecord(card)
     lastGoodAtMs = nil,
     attempts = 0,
     nextDueAtMs = 0,
+    -- The second reading is nested so it travels with its card through
+    -- adoptRecords and signature, and gets its own rhythm: a package check does
+    -- not run on the service's cadence (D27).
+    updates = newUpdatesRecord(card),
   }
 end
 
@@ -90,6 +108,12 @@ local function adoptRecords()
           record.rowCount = previous.rowCount
           record.lastGoodAtMs = previous.lastGoodAtMs
           record.attempts = previous.attempts
+          if record.updates ~= nil and previous.updates ~= nil then
+            record.updates.state = previous.updates.state
+            record.updates.text = previous.updates.text
+            record.updates.lastGoodAtMs = previous.updates.lastGoodAtMs
+            record.updates.attempts = previous.updates.attempts
+          end
         end
         record.nextDueAtMs = 0 -- poll everything once on (re)load
         adopted[card.id] = record
@@ -109,6 +133,7 @@ end
 local function signature()
   local parts = { fatal }
   for id, record in pairs(cards) do
+    local updates = record.updates
     parts[#parts + 1] = table.concat({
       id,
       record.state,
@@ -117,6 +142,9 @@ local function signature()
       record.configError or "",
       tostring(record.rowCount),
       tostring(record.attempts),
+      updates and updates.state or "",
+      updates and updates.text or "",
+      updates and updates.error or "",
     }, "\1")
   end
   table.sort(parts)
@@ -201,6 +229,48 @@ local function poll(card, record)
   end)
 end
 
+--- The updates reading reuses the pipeline rather than growing a parser: a
+--- `command` source fetches, and `evaluate` with a `{ warn: 1 }` threshold turns
+--- the count into a state and its text. The one thing the pipeline cannot do for
+--- a `command` is read the count as a number — stdout is text — so a non-number
+--- is `down` with the bytes quoted, never a zero the badge would draw as "all
+--- clear".
+local function pollUpdates(card, record)
+  local updates = record.updates
+  local spec = card.updates
+
+  Pipeline.fetch({ source = spec.source, timeoutMs = spec.timeoutMs }, function(raw, err)
+    if err ~= nil then
+      updates.attempts = updates.attempts + 1
+      updates.error = err
+      updates.state = "down"
+      return
+    end
+
+    local n = tonumber(type(raw) == "number" and raw or tostring(raw))
+    if n == nil then
+      updates.attempts = updates.attempts + 1
+      updates.error = "update check did not return a number: " .. string.format("%q", tostring(raw))
+      updates.state = "down"
+      return
+    end
+
+    local reading = Pipeline.evaluate({ thresholds = { warn = 1 }, format = spec.format }, n)
+    if reading.error ~= nil then
+      updates.attempts = updates.attempts + 1
+      updates.error = reading.error
+      updates.state = "down"
+      return
+    end
+
+    updates.attempts = 0
+    updates.error = nil
+    updates.state = reading.state
+    updates.text = reading.text
+    updates.lastGoodAtMs = nowMs()
+  end)
+end
+
 --- The degradation ladder from docs/06-failure-modes.md:
 ---   attempt fails    -> down,   previous value retained
 ---   stale_after_sec  -> stale,  previous value retained, dimmed
@@ -228,6 +298,11 @@ local function tickCard(card, record, stamp)
     -- quickly a source answers (docs/06-failure-modes.md).
     record.nextDueAtMs = stamp + card.intervalSec * 1000
     poll(card, record)
+  end
+
+  if record.updates ~= nil and stamp >= record.updates.nextDueAtMs then
+    record.updates.nextDueAtMs = stamp + card.updates.intervalSec * 1000
+    pollUpdates(card, record)
   end
 
   applyAge(record, card, stamp)
@@ -281,6 +356,9 @@ local function refreshSoon()
       local record = cards[card.id]
       if record ~= nil then
         record.nextDueAtMs = 0
+        if record.updates ~= nil then
+          record.updates.nextDueAtMs = 0
+        end
       end
     end
   end

@@ -279,6 +279,87 @@ a service with zero nodes; the broken template reads as a broken template.
 `thresholds` must have `warn` below `critical`, and the validator says so rather
 than accepting a card whose amber is unreachable.
 
+**`kind: status` draws only its dot.** The value column is not rendered for a
+status card: the dot's colour carries the state, and a word beside it was the same
+fact twice. `format` and `unit` have no effect on a `status` card
+([D27](07-decisions.md)). Metric, release, link, console and list cards still show
+their reading.
+
+### updates — a second reading on the card
+
+A card can carry one extra reading about the host it watches: how many OS packages
+are waiting. It draws as a **badge before the state dot**, and it is silent when
+there is nothing to say — no pending updates, or the check has not answered yet. A
+count is a button: pressing it runs the install command in a terminal. A check that
+could not run is a dim red glyph whose tooltip carries the reason, because "no
+updates" and "could not ask" are different facts. The badge never changes the
+card's own dot and is not counted in the header's error total
+([D27](07-decisions.md)).
+
+```yaml
+- id: pihole
+  title: Pi-hole
+  kind: status
+  description: DNS filtering and ad blocking
+  source:
+    type: command
+    argv: ["curl", "-k", "-sS", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "3", "https://dns.home.lan/admin/"]
+  updates:
+    source:
+      type: command
+      argv: ["ssh", "proxmox", "pct exec 100 -- sh -c 'apt-get update -qq >/dev/null || exit 1; apt-get -s -q upgrade | grep -c ^Inst || true'"]
+    interval_sec: 3600
+    run: "ssh -t proxmox 'pct exec 100 -- sh -c \"apt-get update && apt-get -y upgrade\"'"
+```
+
+| Field | Required | Description |
+|---|---|---|
+| `source` | yes | A source that prints the count as a number; `command` in this build |
+| `run` | no | The install command the count button runs; without it the count is read-only |
+| `interval_sec` | no | Poll period; defaults to `3600` — a package check is not asked at the card's cadence |
+| `timeout_ms` | no | Timeout; defaults to `defaults.timeout_ms` |
+| `format` | no | Template for the badge text; `{n}` is the count |
+
+**The check prints a number, and anything else is `down`.** stdout is text, so the
+collector reads it as a number; a non-number becomes a failure with the bytes
+quoted, never a zero the badge would draw as "all clear". A count of `0` is `ok` and
+draws nothing; `1` or more is `warn` and draws the button.
+
+**The distribution is the config author's, not the plugin's.** Debian is `apt-get`,
+Alpine is `apk`, and there is no `family:` field: a plugin that guessed between them
+would be an integration to keep in step with every distribution that appears
+([D17](07-decisions.md), [D27](07-decisions.md)). The two canonical checks:
+
+```yaml
+# Debian / Ubuntu
+argv: ["ssh", "proxmox", "pct exec 100 -- sh -c 'apt-get update -qq >/dev/null || exit 1; apt-get -s -q upgrade | grep -c ^Inst || true'"]
+
+# Alpine
+argv: ["ssh", "proxmox", "pct exec 116 -- sh -c 'apk update -q >/dev/null 2>&1 || exit 1; apk version -l \"<\" | grep -c \"<\" || true'"]
+```
+
+**A bare host answers too, without the `pct` hop.** The node's own packages are the
+same check on the far side of `ssh` alone — `ssh proxmox sh -c '...'`, no `pct exec`
+— and its install is `ssh -t proxmox 'apt-get update && apt-get -y upgrade'`.
+Container or host is a property of the command, not of the schema, which is the
+point of writing the command out.
+
+Three things in those strings are load-bearing, and all three were verified against
+live containers:
+
+- **`sh -c`, not `sh -lc`.** A login shell sources the container's profile and an
+  MOTD banner lands in stdout, where the count cannot tell it from an answer.
+- **`|| true` after the `grep -c`.** `grep -c` exits `1` when it counts zero, and a
+  non-zero exit is `down` — without it, "no updates" would render as a failed check.
+- **Alpine counts `<` markers, not lines.** `apk version -l '<'` prints an
+  `Installed: Available:` header, so `wc -l` is off by one; the marker lines are the
+  only rows.
+
+The Debian check runs `apt-get update` first, so it writes the package lists inside
+the container once per interval. That is the price of a count that is about now
+rather than about whenever the lists last moved; a card that would rather not touch
+the container can drop that part and read whatever lists are already there.
+
 ## Actions
 
 A card can do something. An action is a **button on the card's trailing edge**, not

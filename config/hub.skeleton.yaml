@@ -7,8 +7,8 @@
 # Most cards here use `source: { type: static }`, which renders exactly as
 # written — the fastest way to see the panel's shape without touching anything.
 # `command` fetches now too, so the Pi-hole card below is a real reading: it
-# asks the host over HTTPS, and it carries the two trailing buttons, one to the
-# admin UI and one into the container.
+# asks the host over HTTPS, shows its pending OS updates as a button, and carries
+# the two trailing buttons, one to the admin UI and one into the container.
 #
 # http / stream / rss are still recognised but not built: a card that uses one
 # says "not implemented in this build" rather than showing nothing, which is the
@@ -58,6 +58,33 @@ domains:
         description: Keenetic, gateway and routing
         source: { type: static, value: running }
 
+      # The host itself, not a service in a container: the probe is the web UI at
+      # the URL a browser uses, and the terminal is a plain ssh into the node. No
+      # `pct exec` here — there is no container between this panel and Proxmox VE.
+      # The probe follows the same self-signed-certificate reasoning as Pi-hole
+      # below (`-k`), and any HTTP answer is a live host.
+      #
+      # `updates` shows the node's own pending packages — the same second reading,
+      # one hop shorter: `ssh proxmox` then `sh -c`, with no `pct` in between.
+      # Upgrades here land on the hypervisor, not in a container, which is why the
+      # count is a button into a terminal rather than something run out of sight.
+      - id: proxmox
+        title: Proxmox
+        glyph: server-cog
+        kind: status
+        description: Proxmox VE web interface
+        link: https://proxmox.home.lan/
+        run: "ssh proxmox"
+        source:
+          type: command
+          argv: ["curl", "-k", "-sS", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "3", "https://proxmox.home.lan/"]
+        updates:
+          interval_sec: 3600
+          source:
+            type: command
+            argv: ["ssh", "proxmox", "sh -c 'apt-get update -qq >/dev/null || exit 1; apt-get -s -q upgrade | grep -c ^Inst || true'"]
+          run: "ssh -t proxmox 'apt-get update && apt-get -y upgrade'"
+
       - id: storage
         title: Storage
         glyph: database
@@ -82,10 +109,22 @@ domains:
       # get in". `-k` because a LAN service may present a self-signed certificate,
       # and a certificate warning is not the question either.
       #
+      # A `kind: status` card draws only the dot, so there is no `format:` here to
+      # write "online" into (D27).
+      #
       # `link` and `run` are the two trailing buttons — one opens the admin UI in
       # the browser, the other drops into the container. `-t` gives the container
       # the TTY `pct enter` needs; without it the shell opens and does nothing.
       # The hop is `ssh` plus `pct exec` in one `run` string, shell-verbatim (D17).
+      #
+      # `updates` is the second reading, drawn as a badge before the dot: how many
+      # OS packages the container has pending. It speaks only when there is
+      # something to say — nothing pending is nothing on screen — and the count is
+      # the button that installs them. The check is Debian's, written out because
+      # the plugin does not guess apt from apk (D17, D27): `sh -c`, not `sh -lc`,
+      # or the container's MOTD lands in the output; `|| true` so a zero count is
+      # not read as a command failure; `apt-get update` first so the count is
+      # about now rather than about whenever the package lists last moved.
       - id: pihole
         title: Pi-hole
         glyph: shield-check
@@ -96,7 +135,13 @@ domains:
         source:
           type: command
           argv: ["curl", "-k", "-sS", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "3", "https://dns.home.lan/admin/"]
-        format: "online"
+        updates:
+          # Every 3600s by default; a package check is not asked on the card's 60s.
+          interval_sec: 3600
+          source:
+            type: command
+            argv: ["ssh", "proxmox", "pct exec 100 -- sh -c 'apt-get update -qq >/dev/null || exit 1; apt-get -s -q upgrade | grep -c ^Inst || true'"]
+          run: "ssh -t proxmox 'pct exec 100 -- sh -c \"apt-get update && apt-get -y upgrade\"'"
 
       # `format` and `unit` are the value column. `{n}` is the extracted value.
       - id: nodes

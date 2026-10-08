@@ -831,6 +831,83 @@ collector's side of the boundary ([D12](#d12-the-panel-acts-but-only-by-delegati
 
 ---
 
+## D27. `kind: status` draws only its dot
+
+**Decision.** A `status` card renders no value column. The state marker's colour is
+the whole reading; `format` and `unit` have no effect on a `status` card. Metric,
+release, link, console and list cards are unchanged.
+
+**Why.** On a status card the value was always a restatement of the dot —
+`running`, `online`, `degraded` — and the dot is the faster read. Two encodings of
+one fact is density spent on nothing, and this panel is read at a glance. Removing
+it also gives the trailing edge back to the things that are not the card's state:
+the update badge and the action buttons.
+
+**What the value was carrying, and where it goes.** A status card's text still
+exists in state, and a failure still explains itself on the dot's tooltip
+([D25](#d25-the-card-is-github-kanbans-activity-row-overview-is-the-landing-tab)).
+A `map`-driven `warn` with no error message is the one case that loses its word; the
+description is where that belongs, not a second spelling of the same colour.
+
+**Rejected.**
+
+- *A per-card `show_value: false` flag.* It would make the common case a config edit
+  and leave two ways to say "just the dot". The rule is the same on every status
+  card, so it belongs in the renderer, not in each file.
+- *Keeping the value and hiding it only when `ok`.* Then a card changes height as it
+  changes state, and the nominal case — the one you glance at — still carries the
+  word. The point was to stop drawing it at all.
+
+---
+
+## D28. OS updates are a card's second reading
+
+**Decision.** A card may carry an `updates` block: a source that prints the number
+of pending OS packages, a `run` string that installs them, and an optional interval
+that defaults to one hour. The count draws as a warn-coloured badge immediately left
+of the state dot. Zero draws nothing; a failed check draws a dim red glyph with its
+reason on the tooltip. The count is the button.
+
+**Why this shape.** The update count is not the card's state — Pi-hole can be up
+with updates pending, and a broken `ssh` for the count is not a broken Pi-hole — so
+it is a second reading with its own state, not a threshold on the card's dot and not
+a separate card. A separate card would lose the "on the same host" relation the row
+already carries; a threshold on the dot would make one colour mean two things.
+
+**Why zero draws nothing.** A badge that says `0` is a permanent reassurance nobody
+reads, and it competes with the badge that says `43`. Silence is the correct
+rendering of "nothing to do"; the check's failure is the one case that must not be
+silent, so it gets a glyph.
+
+**Why the distribution is in the config.** Debian is `apt-get`, Alpine is `apk`, and
+the two need different commands. A `family:` field would be the plugin choosing a
+command from a distribution name, which is the integration wrapper D17 refuses for
+Proxmox: a thing the plugin must keep in step with every distribution that appears.
+The check is an ordinary `command` source and the install is an ordinary `run`
+string, written out. [hub.example.yaml](../config/hub.example.yaml) carries both a
+Debian and an Alpine card.
+
+**Why an hour.** A package check is the one reading in the panel that may reach the
+network and write the package lists — the Debian check runs `apt-get update`. It is
+not asked on the card's 60-second cadence; `interval_sec` defaults to `3600` and a
+card may override it.
+
+**Rejected.**
+
+- *A generic `badge:` second reading.* The more general field is the more general
+  problem: it needs its own thresholds and its own rendering rules for every kind,
+  and a reason to exist beyond this one. `updates` says exactly one thing, and the
+  mechanism it reuses (`fetch` then `evaluate`) is already the general one.
+- *Counting updates in the header's error total.* The trust line is about cards that
+  failed. An update badge is a fact about the host, not a fault in the panel's
+  reading of it, and folding it in would make `2 errors` mean two different things.
+- *Trusting a `0` from a failed `grep -c`.* `grep -c` exits `1` on a zero count and a
+  non-zero exit is `down`, so the check ends in `|| true`; and output that is not a
+  number is `down` with the bytes quoted, never a zero the badge would draw as "all
+  clear".
+
+---
+
 ## Resolved questions
 
 Earlier revisions carried these as open. Each is decided here; the reasoning is kept

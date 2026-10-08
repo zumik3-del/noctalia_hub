@@ -67,12 +67,14 @@ The service writes four state keys and nothing else. Every one is namespaced
 | `hub.cards` | `cardId -> runtime record`, the readings |
 | `hub.summary` | per-state counts, for the header line and the bar widget |
 | `hub.fatal` | why the config could not be read, `""` when it could |
-| `hub.cmd` | panel → collector requests; `refresh` is the only one so far |
+| `hub.cmd` | panel → collector requests: `refresh`, and the card action buttons |
 
 A runtime record is `{ state, text, fields, rows, rowCount, error, configError,
-lastGoodAtMs, attempts, nextDueAtMs }`. `error` is a problem with the source;
-`configError` is a problem with the card itself, which is already true before the
-first poll and does not clear when the source recovers.
+lastGoodAtMs, attempts, nextDueAtMs, updates }`. `error` is a problem with the
+source; `configError` is a problem with the card itself, which is already true before
+the first poll and does not clear when the source recovers. `updates` is the card's
+second reading when it has one — its own `{ state, text, error, lastGoodAtMs,
+attempts, nextDueAtMs }`, nested so it travels with the card ([D28](07-decisions.md)).
 
 **A publish that changes nothing is a publish that costs a tree rebuild.** Both
 subscribers redraw on every write, so the collector compares a signature of
@@ -211,6 +213,8 @@ Properties that matter for this layout:
 - `ui.graph` — sparklines, values `0..1`, a second series via `values2`
 - `ui.scroll` — panels only; skipped with a warning in the bar
 - `ui.select` — not allowed inside a persistent panel
+- `ui.box` is a **leaf** — it takes no children; a tooltip on a node that has
+  content goes on the `row`/`column` that wraps it, which take one too
 - `dragSource` / `dropZone` — edit mode, `plugin_api` 5+
 - `key` on a node gives it stable identity across renders, which preserves search
   input text and hover state
@@ -363,7 +367,8 @@ shipped.
 5. **Hot reload.**
 6. **Actions** — `link` and `run:` are drawn as trailing buttons and executed
    ([D26](07-decisions.md)); `link_template`, `deep_link` and `panel` are
-   validated and carried but not drawn.
+   validated and carried but not drawn. The `updates` badge reuses `run` for its
+   install button ([D28](07-decisions.md)).
 7. **Console cards** — `stream` with a ring buffer, torn down on panel close.
 8. **List cards** — `extract` widening to many, collapsed-to-count then expand.
 9. **Card editor** — `dragSource`/`dropZone`, writing back to `hub.yaml`.

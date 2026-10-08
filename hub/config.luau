@@ -452,6 +452,61 @@ local function readActions(card, path, sink)
   return actions
 end
 
+-- ── updates: the card's second reading ───────────────────────────────────────
+
+--- How often a card asks its host about pending OS updates. A package check is
+--- the one reading in the panel that is not cheap: it may reach the network and
+--- touch the package lists. Once an hour is the default the schema promises, and
+--- a card may override it.
+local UPDATES_DEFAULT_INTERVAL_SEC = 3600
+
+--- `updates` is a card's second reading: whether the host that runs the service
+--- has pending OS updates. It is deliberately not a general second source. It is
+--- a count with one fixed meaning — nothing pending says nothing, anything
+--- pending is `warn` — and a command that installs them. See D27.
+---
+--- The distribution is the config author's knowledge, not the plugin's. Debian is
+--- `apt-get`, Alpine is `apk`, and a plugin that guessed between them would be an
+--- integration it has to keep in step with every distribution that appears. The
+--- commands are explicit `command` sources and `run` strings, the same way D17
+--- keeps a container hop out of the schema.
+local function readUpdates(raw, path, sink, defaults)
+  if raw == nil then
+    return nil
+  end
+  if not isTable(raw) then
+    sink.add(path, "expected a mapping of update options")
+    return nil
+  end
+
+  local updates = {}
+
+  updates.source = readSource(raw.source, path .. ".source", sink)
+  updates.intervalSec = readPositive(raw.interval_sec, path .. ".interval_sec", sink, UPDATES_DEFAULT_INTERVAL_SEC)
+  updates.timeoutMs = readPositive(raw.timeout_ms, path .. ".timeout_ms", sink, defaults.timeoutMs)
+
+  if raw.format ~= nil then
+    if isString(raw.format) then
+      updates.format = raw.format
+    else
+      sink.add(path .. ".format", "expected a format string, e.g. \"{n}\"")
+    end
+  end
+
+  -- The upgrade is what the count becomes a button for. It is optional so an
+  -- `updates` block can be read-only, but a card that draws a count with nothing
+  -- behind it is a button that does nothing, which is worse than no button.
+  if raw.run ~= nil then
+    if not isString(raw.run) or raw.run == "" then
+      sink.add(path .. ".run", "expected a non-empty command string")
+    else
+      updates.run = raw.run
+    end
+  end
+
+  return updates
+end
+
 -- ── card ─────────────────────────────────────────────────────────────────────
 
 local function readCard(raw, path, seenIds, defaults, sink)
@@ -566,6 +621,7 @@ local function readCard(raw, path, seenIds, defaults, sink)
   end
 
   card.actions = readActions(raw, path, own)
+  card.updates = readUpdates(raw.updates, path .. ".updates", own, defaults)
 
   -- `link_template` is built from extracted fields by definition, so a template
   -- with no placeholder is a forgotten `{tag}`.
