@@ -45,7 +45,7 @@ A GUI editor remains possible later (see [07-decisions](07-decisions.md)).
 
 - full-screen panel with zones grouped by domain
 - card kinds: status, metric, release, link, console, list
-- source types: HTTP, command, line stream, RSS, static value
+- source types: HTTP, command, stream, RSS, static value
 - click actions: `link`, `link_template`, `deep_link`, `panel`, `run`
 - compact bar summary widget
 - hotkey to open the panel

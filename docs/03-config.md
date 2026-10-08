@@ -105,7 +105,9 @@ domains:
           type: http
           url: https://pve.home.lan:8006/api2/json/cluster/resources
           auth: { token: "${proxmox_token}" }
-          extract: "length"
+          # /cluster/resources returns nodes AND guests. The label says nodes, so
+          # count nodes — a bare `length` counts every VM and LXC too.
+          extract: ".data | map(select(.type == \"node\")) | length"
         format: "{n} nodes"
         thresholds: { warn: 6, critical: 8 }
         graph: true
@@ -277,7 +279,7 @@ Panels come in two spellings:
 
 | Id | Example |
 |---|---|
-| Built-in | `launcher`, `control-center`, `clipboard`, `polkit`, `session`, `wallpaper` |
+| Built-in | `launcher`, `control-center`, `clipboard`, `polkit`, `session`, `tray-drawer`, `wallpaper` |
 | A plugin's panel | `author/plugin:panel` |
 
 There is **no standalone `calendar` or `weather` panel**. Both are sections of the
