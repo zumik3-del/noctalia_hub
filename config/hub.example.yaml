@@ -104,7 +104,7 @@ domains:
       # passed to the shell verbatim and never interpolates source values.
       - id: pve-ssh
         title: pve.home.lan
-        glyph: ssh
+        glyph: terminal
         kind: status
         run: "ssh root@pve.home.lan"
         source:
@@ -309,7 +309,7 @@ domains:
 
       - id: xyops-backup
         title: nightly backup
-        glyph: database-backup
+        glyph: archive
         kind: status
         source:
           type: http
@@ -483,7 +483,7 @@ domains:
       # than waiting for a click.
       - id: go-hassio
         title: Home Assistant
-        glyph: home-assistant
+        glyph: home
         kind: link
         description: Entity manager from the hassio plugin
         source: { type: static, value: "—" }
@@ -520,7 +520,7 @@ domains:
 
       - id: link-ha
         title: Home Assistant
-        glyph: home-assistant
+        glyph: home
         kind: link
         link: https://ha.home.lan
         source: { type: static, value: "—" }
@@ -562,7 +562,7 @@ domains:
 
       - id: disk-home
         title: Disk /
-        glyph: hard-drive
+        glyph: folder
         kind: metric
         source:
           type: command

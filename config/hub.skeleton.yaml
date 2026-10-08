@@ -81,7 +81,7 @@ domains:
       # nothing about whether 38% is nominal.
       - id: backup-age
         title: Backup age
-        glyph: database-backup
+        glyph: archive
         kind: metric
         source: { type: static, value: 7 }
         format: "{n}"
@@ -186,7 +186,7 @@ domains:
 
       - id: disk
         title: Disk /
-        glyph: hard-drive
+        glyph: folder
         kind: metric
         source: { type: static, value: 71 }
         format: "{n}%"
