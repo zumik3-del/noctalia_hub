@@ -21,6 +21,22 @@ local M = {}
 --- list, not as one paragraph, and this is the whole of its leading.
 local ERROR_ROW_GAP = 4
 
+--- A config error gets two lines: it is a path *and* a message, and the path
+--- alone often fills the first. Clipped rather than scrolled — this is a list,
+--- and the same reason still sits on the card's own state marker.
+local ERROR_MAX_LINES = 2
+
+--- The zone header's own two numbers. Its glyph leads its label by a step, the
+--- way the panel header's does, and the parts of the header sit a little apart —
+--- tighter than the gap between cards, because a header is one line about them.
+local ZONE_HEADER_STEP = 1
+local ZONE_HEADER_GAP = 6
+
+--- A zone's own secondary text — the "empty zone" hint, a config error — sits one
+--- step under the base size, the way a card's value does. Two different places
+--- saying the same thing about the same line.
+local ZONE_TEXT_STEP = 1
+
 --- Problems in this zone, for the header count. Only real problems: a `pending`
 --- card is an absence of one, and counting it would make every freshly loaded
 --- panel look broken. Each card counts at most once.
@@ -60,7 +76,7 @@ end
 
 local function renderZoneHeader(view, glyph, title, problems, size)
   local children = {
-    ui.glyph({ name = glyph or "layout-columns", size = size + 1, color = view.dimmed }),
+    ui.glyph({ name = glyph or "layout-columns", size = size + ZONE_HEADER_STEP, color = view.dimmed }),
     Visual.glyphLabel({
       text = string.upper(title or ""),
       fontSize = size,
@@ -82,7 +98,7 @@ local function renderZoneHeader(view, glyph, title, problems, size)
 
   children[#children + 1] = ui.separator({ thickness = 1, color = view.dimmed })
 
-  return ui.row({ gap = 6, align = "center" }, children)
+  return ui.row({ gap = ZONE_HEADER_GAP, align = "center" }, children)
 end
 
 --- `index` is the zone's position in the document, and it keys the zone. Keyed by
@@ -116,7 +132,7 @@ function M.renderZone(view, domain, index)
     children[#children + 1] = ui.spacer({ height = rowGap })
     children[#children + 1] = ui.label({
       text = noctalia.tr("zone.empty"),
-      fontSize = size - 1,
+      fontSize = size - ZONE_TEXT_STEP,
       color = view.dimmed,
       maxLines = 1,
     })
@@ -147,9 +163,9 @@ function M.renderConfigErrors(view)
     children[#children + 1] = ui.spacer({ height = ERROR_ROW_GAP })
     children[#children + 1] = ui.label({
       text = err.path .. " — " .. err.message,
-      fontSize = size - 1,
+      fontSize = size - ZONE_TEXT_STEP,
       color = "error",
-      maxLines = 2,
+      maxLines = ERROR_MAX_LINES,
     })
   end
 
