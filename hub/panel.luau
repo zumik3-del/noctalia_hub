@@ -296,7 +296,11 @@ end
 --- that takes no `source` and no collector record (config.luau).
 local function renderLinkCard(card, sizes, index)
   local size = fontSize(sizes.valueSize)
-  local key = "card:" .. (card.id or ("unnamed-" .. tostring(index)))
+  -- Keyed by position, not by `card.id`: a duplicate id is a config error (and is
+  -- reported as one), but two rows under one key make the second invisible on
+  -- screen, which is the one place a config error must not be able to hide. A
+  -- card with no id still has a position, so both problems draw.
+  local key = "card:" .. tostring(index)
   local active = hovered == key
   local border, borderWidth = cardBorder(active)
 
@@ -399,7 +403,7 @@ local function renderCard(card, record, sizes, index)
   -- unconditionally.
   record = record or { state = "pending", text = "", attempts = 0, rowCount = 0 }
 
-  local key = "card:" .. (card.id or ("unnamed-" .. tostring(index)))
+  local key = "card:" .. tostring(index)
   local active = hovered == key
   local border, borderWidth = cardBorder(active)
 
@@ -538,8 +542,22 @@ local function zoneProblemCount(domain)
     if card.hidden ~= true then
       local record = cards[card.id]
       local problem = false
-      if record ~= nil and (record.state == "down" or record.state == "warn" or record.state == "stale") then
-        problem = true
+      if record ~= nil then
+        if record.state == "down" or record.state == "warn" or record.state == "stale" then
+          problem = true
+        end
+        -- A failed update check is a reading that could not be made, so it is a
+        -- fault in the card and it counts like one — the dim red badge is the
+        -- only trace of it otherwise, and a zone header that says "0" over a
+        -- broken badge is a lie the panel can see from the outside.
+        --
+        -- A *pending* update is deliberately not here. It is a fact about the
+        -- host rather than a fault in the card, and it already shows as the
+        -- badge on the card and the warn count in the header (D27, D28); a zone
+        -- with one pending package is not a zone with a problem.
+        if record.updates ~= nil and record.updates.state == "down" then
+          problem = true
+        end
       end
       if #(card.errors or {}) > 0 then
         problem = true
@@ -579,7 +597,7 @@ local function renderZoneHeader(glyph, title, problems, size)
   return ui.row({ gap = 6, align = "center" }, children)
 end
 
-local function renderZone(domain, sizes, rowGap, zonePadding)
+local function renderZone(domain, sizes, rowGap, zonePadding, index)
   local size = fontSize(sizes.valueSize)
   local children = { renderZoneHeader(domain.glyph, domain.title or domain.id, zoneProblemCount(domain), size) }
 
@@ -610,7 +628,7 @@ local function renderZone(domain, sizes, rowGap, zonePadding)
   end
 
   return ui.column({
-    key = "zone:" .. (domain.id or "?"),
+    key = "zone:" .. tostring(index),
     gap = 0,
     padding = zonePadding,
   }, children)
@@ -823,14 +841,14 @@ function render()
     scrolling[#scrolling + 1] = configErrors
   end
 
-  for _, domain in ipairs(doc.domains or {}) do
+  for index, domain in ipairs(doc.domains or {}) do
     -- `pin: bottom` takes a zone out of the scrolling flow: it is background, and
     -- it must not push content around as its numbers change (D6). It is the one
     -- zone that draws on every tab, `overview` included.
     if domain.pin == "bottom" then
-      footer = renderZone(domain, sizes, sizes.rowGap, zonePadding)
+      footer = renderZone(domain, sizes, sizes.rowGap, zonePadding, index)
     elseif activeTab == domain.id then
-      scrolling[#scrolling + 1] = renderZone(domain, sizes, sizes.rowGap, zonePadding)
+      scrolling[#scrolling + 1] = renderZone(domain, sizes, sizes.rowGap, zonePadding, index)
     end
   end
 
