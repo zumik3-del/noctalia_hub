@@ -182,50 +182,92 @@ end
 
 -- ── polling ──────────────────────────────────────────────────────────────────
 
-local function poll(card, record)
-  Pipeline.fetch(card, function(raw, err)
-    if err ~= nil then
-      -- The reading survives: state and error change, text and age do not.
-      record.attempts = record.attempts + 1
-      record.error = err
-      record.state = "down"
-      if record.lastGoodAtMs == nil then
-        record.text = "—"
-      end
+--- The host's `runAsync` refuses to start a command when too many are already
+--- running, and answers with "command could not be started". A zone of a dozen
+--- cards all due on the same tick is exactly that pile-up — every card is due at
+--- once on load and again when its interval lands on the same second — so the
+--- collector starts at most a few at a time and drains the rest as each
+--- finishes. The cap is low on purpose: the run channel is shared with every
+--- other plugin in the shell.
+local MAX_INFLIGHT = 4
+local inflight = 0
+local queue = {}
+
+--- Starts queued jobs while there is room. A job is `function(done)` and must
+--- call `done` exactly once when its fetch settles, which is what frees the slot
+--- and lets the next one start.
+local pump
+pump = function()
+  while inflight < MAX_INFLIGHT do
+    local job = table.remove(queue, 1)
+    if job == nil then
       return
     end
+    inflight = inflight + 1
+    job(function()
+      inflight = inflight - 1
+      pump()
+    end)
+  end
+end
 
-    local reading = Pipeline.evaluate(card, raw)
-    record.attempts = 0
+local function enqueue(job)
+  queue[#queue + 1] = job
+  pump()
+end
 
-    if reading.error ~= nil then
-      -- The fetch worked and the reading does not make sense. That is `down`
-      -- with the reason attached, and it does not overwrite the last good value.
-      record.error = reading.error
-      record.state = "down"
-      if record.lastGoodAtMs == nil then
-        record.text = "???"
-      end
-      return
+--- The fetch worked or it did not; either way the record keeps its last good
+--- reading (D7). Split out of the runAsync callback so the scheduler is told the
+--- job finished no matter which branch returned.
+local function applyReading(card, record, raw, err)
+  if err ~= nil then
+    -- The reading survives: state and error change, text and age do not.
+    record.attempts = record.attempts + 1
+    record.error = err
+    record.state = "down"
+    if record.lastGoodAtMs == nil then
+      record.text = "—"
     end
+    return
+  end
 
-    record.error = nil
+  local reading = Pipeline.evaluate(card, raw)
+  record.attempts = 0
 
-    -- A list that was non-empty and is now empty is a broken fetch, not a fact
-    -- about the world (D16). A list that has simply never had rows is fine.
-    if card.kind == "list" and (reading.rowCount or 0) == 0 and (record.rowCount or 0) > 0 then
-      record.state = "warn"
-      record.error = "no rows — this source returned " .. tostring(record.rowCount) .. " a moment ago"
-      record.lastGoodAtMs = nowMs()
-      return
+  if reading.error ~= nil then
+    -- The fetch worked and the reading does not make sense. That is `down`
+    -- with the reason attached, and it does not overwrite the last good value.
+    record.error = reading.error
+    record.state = "down"
+    if record.lastGoodAtMs == nil then
+      record.text = "???"
     end
+    return
+  end
 
-    record.state = reading.state
-    record.text = reading.text
-    record.fields = reading.fields
-    record.rows = reading.rows
-    record.rowCount = reading.rowCount or 0
+  record.error = nil
+
+  -- A list that was non-empty and is now empty is a broken fetch, not a fact
+  -- about the world (D16). A list that has simply never had rows is fine.
+  if card.kind == "list" and (reading.rowCount or 0) == 0 and (record.rowCount or 0) > 0 then
+    record.state = "warn"
+    record.error = "no rows — this source returned " .. tostring(record.rowCount) .. " a moment ago"
     record.lastGoodAtMs = nowMs()
+    return
+  end
+
+  record.state = reading.state
+  record.text = reading.text
+  record.fields = reading.fields
+  record.rows = reading.rows
+  record.rowCount = reading.rowCount or 0
+  record.lastGoodAtMs = nowMs()
+end
+
+local function poll(card, record, complete)
+  Pipeline.fetch(card, function(raw, err)
+    applyReading(card, record, raw, err)
+    complete()
   end)
 end
 
@@ -235,39 +277,45 @@ end
 --- a `command` is read the count as a number — stdout is text — so a non-number
 --- is `down` with the bytes quoted, never a zero the badge would draw as "all
 --- clear".
-local function pollUpdates(card, record)
+local function applyUpdates(card, record, raw, err)
   local updates = record.updates
   local spec = card.updates
 
+  if err ~= nil then
+    updates.attempts = updates.attempts + 1
+    updates.error = err
+    updates.state = "down"
+    return
+  end
+
+  local n = tonumber(type(raw) == "number" and raw or tostring(raw))
+  if n == nil then
+    updates.attempts = updates.attempts + 1
+    updates.error = "update check did not return a number: " .. string.format("%q", tostring(raw))
+    updates.state = "down"
+    return
+  end
+
+  local reading = Pipeline.evaluate({ thresholds = { warn = 1 }, format = spec.format }, n)
+  if reading.error ~= nil then
+    updates.attempts = updates.attempts + 1
+    updates.error = reading.error
+    updates.state = "down"
+    return
+  end
+
+  updates.attempts = 0
+  updates.error = nil
+  updates.state = reading.state
+  updates.text = reading.text
+  updates.lastGoodAtMs = nowMs()
+end
+
+local function pollUpdates(card, record, complete)
+  local spec = card.updates
   Pipeline.fetch({ source = spec.source, timeoutMs = spec.timeoutMs }, function(raw, err)
-    if err ~= nil then
-      updates.attempts = updates.attempts + 1
-      updates.error = err
-      updates.state = "down"
-      return
-    end
-
-    local n = tonumber(type(raw) == "number" and raw or tostring(raw))
-    if n == nil then
-      updates.attempts = updates.attempts + 1
-      updates.error = "update check did not return a number: " .. string.format("%q", tostring(raw))
-      updates.state = "down"
-      return
-    end
-
-    local reading = Pipeline.evaluate({ thresholds = { warn = 1 }, format = spec.format }, n)
-    if reading.error ~= nil then
-      updates.attempts = updates.attempts + 1
-      updates.error = reading.error
-      updates.state = "down"
-      return
-    end
-
-    updates.attempts = 0
-    updates.error = nil
-    updates.state = reading.state
-    updates.text = reading.text
-    updates.lastGoodAtMs = nowMs()
+    applyUpdates(card, record, raw, err)
+    complete()
   end)
 end
 
@@ -305,12 +353,16 @@ local function tickCard(card, record, stamp)
     -- A fixed interval per card. The panel does not adapt the period to how
     -- quickly a source answers (docs/06-failure-modes.md).
     record.nextDueAtMs = stamp + card.intervalSec * 1000
-    poll(card, record)
+    enqueue(function(done)
+      poll(card, record, done)
+    end)
   end
 
   if record.updates ~= nil and stamp >= record.updates.nextDueAtMs then
     record.updates.nextDueAtMs = stamp + card.updates.intervalSec * 1000
-    pollUpdates(card, record)
+    enqueue(function(done)
+      pollUpdates(card, record, done)
+    end)
   end
 
   applyAge(record, card, stamp)
