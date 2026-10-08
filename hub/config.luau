@@ -72,6 +72,10 @@ local DEFAULT_DEFAULTS = {
 
 -- ── small helpers ────────────────────────────────────────────────────────────
 
+--- Two of these are aliases, not definitions: `isString` and `isNumber` live in
+--- util.luau because config, pipeline and service all want the same answer. The
+--- local names keep the call sites in this file short, and they cannot drift from
+--- the original — they are the same function object.
 local isString = Util.isString
 local isNumber = Util.isNumber
 
@@ -869,6 +873,18 @@ function M.stamp()
   return table.concat(parts, "|")
 end
 
+--- Where hub.yaml's converted JSON may be cached. The secrets file gets no such
+--- path: its converted JSON carries the same tokens, and writing it beside
+--- hub.json would leave them on disk in two places. Re-reading them is a yq run
+--- per config change, which the collector already pays for hub.yaml.
+local function hubCachePath()
+  local dataDir = noctalia.pluginDataDir()
+  if dataDir == nil then
+    return nil
+  end
+  return dataDir .. "/hub.json"
+end
+
 --- How long yq may take before the read gives up on it. The converter is a
 --- subprocess on the config path, and a hung one would hold the collector's one
 --- in-flight read open forever: this is what turns that into a reason the panel
@@ -935,18 +951,6 @@ local function decodeJson(text, path, done)
     return
   end
   done(value, nil)
-end
-
---- Where hub.yaml's converted JSON may be cached. The secrets file gets no such
---- path: its converted JSON carries the same tokens, and writing it beside
---- hub.json would leave them on disk in two places. Re-reading them is a yq run
---- per config change, which the collector already pays for hub.yaml.
-local function hubCachePath()
-  local dataDir = noctalia.pluginDataDir()
-  if dataDir == nil then
-    return nil
-  end
-  return dataDir .. "/hub.json"
 end
 
 --- hub.yaml -> the decoded document. `onDoc(doc, reason)`; exactly one of the two
