@@ -163,7 +163,16 @@ local function renderCard(card, record, sizes, index)
   -- unconditionally.
   record = record or { state = "pending", text = "", attempts = 0, rowCount = 0 }
 
-  local children = {
+  -- The card's own line is a row, and it has to be: the five children below are a
+  -- horizontal arrangement by construction, and the spacer with flexGrow exists to
+  -- push the value to the trailing edge — which only means anything in a row. In a
+  -- column it grows vertically and the value sits under the title instead of
+  -- against the right edge, so a column of numbers stops reading as a scale
+  -- (docs/02-layout.md).
+  --
+  -- The card itself stays a column, because a card with a second line stacks that
+  -- line under the row rather than beside it.
+  local row = ui.row({ gap = 6, align = "center" }, {
     ui.glyph({
       name = card.glyph or KIND_GLYPH[card.kind] or "activity",
       size = size + 2,
@@ -175,8 +184,6 @@ local function renderCard(card, record, sizes, index)
       color = "on_surface",
       maxLines = 1,
     }),
-    -- The value is pushed to the trailing edge: a column of numbers has to read
-    -- as a scale, and a scale needs a shared edge (docs/02-layout.md).
     ui.spacer({ flexGrow = 1 }),
     glyphLabel({
       text = (record.text ~= nil and record.text ~= "") and record.text or "—",
@@ -191,7 +198,9 @@ local function renderCard(card, record, sizes, index)
       size = size,
       color = STATE_COLOR[record.state] or SECONDARY,
     }),
-  }
+  })
+
+  local children = { row }
 
   local second = cardSecondLine(card, record, size)
   if second ~= nil then
