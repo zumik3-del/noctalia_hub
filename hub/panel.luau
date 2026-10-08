@@ -651,15 +651,26 @@ local function renderStatusLine(size)
   end
 
   local broken = summary.errors > 0
-  local text = noctalia.tr("header.cards", { n = summary.total })
-  if broken then
-    text = text .. " · " .. noctalia.tr("header.errors", { n = summary.errors })
+  local warned = (summary.warn or 0) > 0
+
+  local children = {
+    ui.glyph({ name = broken and "alert-triangle" or "circle-check", size = size + 1, color = broken and "error" or "primary" }),
+    glyphLabel({ text = noctalia.tr("header.cards", { n = summary.total }), fontSize = size - 1, color = broken and "error" or SECONDARY, maxLines = 1 }),
+  }
+
+  -- Warnings ride their own label so the count can be yellow without dragging
+  -- the card total with it: "10 warn" is the same fact the badges state one by
+  -- one, gathered on the header line (D28). Errors, when they exist, follow in
+  -- red — a real failure is not the same attention as a pending package.
+  if warned then
+    children[#children + 1] = glyphLabel({ text = "· " .. noctalia.tr("header.warn", { n = summary.warn }), fontSize = size - 1, color = STATE_COLOR.warn, maxLines = 1 })
   end
 
-  return ui.row({ gap = 4, align = "center" }, {
-    ui.glyph({ name = broken and "alert-triangle" or "circle-check", size = size + 1, color = broken and "error" or "primary" }),
-    glyphLabel({ text = text, fontSize = size - 1, color = broken and "error" or SECONDARY, maxLines = 1 }),
-  })
+  if broken then
+    children[#children + 1] = glyphLabel({ text = "· " .. noctalia.tr("header.errors", { n = summary.errors }), fontSize = size - 1, color = "error", maxLines = 1 })
+  end
+
+  return ui.row({ gap = 4, align = "center" }, children)
 end
 
 --- The zone names moved out of the header line and into this strip: one button

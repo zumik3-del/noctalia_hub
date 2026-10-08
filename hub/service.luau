@@ -155,9 +155,19 @@ local function countStates()
   local counts = { ok = 0, warn = 0, down = 0, stale = 0, pending = 0, errors = 0, total = 0 }
   for _, record in pairs(cards) do
     counts.total = counts.total + 1
-    if counts[record.state] ~= nil then
-      counts[record.state] = counts[record.state] + 1
+    local state = record.state
+    local updatesWarn = record.updates ~= nil and record.updates.state == "warn"
+
+    -- `warn` is a superset of the card's own state: a service whose reading is
+    -- fine but whose host has pending OS updates sits on the same yellow line as
+    -- a crossed threshold (D28). It is counted once, and a card already down or
+    -- stale keeps its more severe count instead of also reading as warn.
+    if state == "warn" or ((state == "ok" or state == "pending") and updatesWarn) then
+      counts.warn = counts.warn + 1
+    elseif counts[state] ~= nil then
+      counts[state] = counts[state] + 1
     end
+
     if record.error ~= nil or record.configError ~= nil then
       counts.errors = counts.errors + 1
     end

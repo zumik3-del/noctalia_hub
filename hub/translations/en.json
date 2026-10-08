@@ -5,7 +5,8 @@
   "header": {
     "cards": "{n} cards",
     "errors": "{n} errors",
-    "loading": "loading…"
+    "loading": "loading…",
+    "warn": "{n} warn"
   },
   "panel": {
     "action_link": "Open in browser",
