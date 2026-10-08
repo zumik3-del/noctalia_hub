@@ -13,8 +13,9 @@
     size(n)    a font size, already scaled by `font_scale`
     radius()   the card corner radius from `layout:`
     spacing()  the gap between cards from `layout:`
-    fill()     the card's fill role for its background mode
-    hoverFill() the fill a hovered card claims
+    fill(active) the card's fill for its background mode, and the hover
+               response — `hover_effect` is a layout field, so the panel
+               resolves it and this file never reads it
     border(active) -> colour, width
     secondary, dimmed
                the two text roles a row uses
@@ -41,9 +42,34 @@ local NO_VALUE = Util.NO_VALUE
 local BADGE_PADDING = 17         -- badge edge past the text size
 local BADGE_GLYPH_OVERHANG = 5   -- the glyph inside the badge
 local BADGE_MIN_RADIUS = 4       -- a badge at the smallest font still reads round
+local BADGE_FILL = "primary/0.12" -- the tile behind the glyph: a palette role
 local TITLE_STEP = 2             -- the title leads its line
 local VALUE_STEP = 1             -- the value sits just under it
 local TITLE_GAP = 3              -- between the title and its second line
+
+--- The leading tile, and the one place the card's glyph is chosen. Both card
+--- shapes draw it — a reading and a `kind: link` bookmark are the same row
+--- underneath — so writing it out twice meant the tile's geometry had two copies
+--- and the glyph's fallback chain had two, which had already diverged: the link
+--- card reached for its own `"link"` while `Visual.KIND_GLYPH` held an
+--- `external-link` for it. One expression, one tile.
+local function leadingTile(size, card)
+  local tile = size + BADGE_PADDING
+  return ui.column({
+    width = tile,
+    height = tile,
+    radius = math.max(BADGE_MIN_RADIUS, math.floor(tile / 4)),
+    fill = BADGE_FILL,
+    align = "center",
+    justify = "center",
+  }, {
+    ui.glyph({
+      name = card.glyph or Visual.KIND_GLYPH[card.kind] or "activity",
+      size = size + BADGE_GLYPH_OVERHANG,
+      color = "primary",
+    }),
+  })
+end
 
 --- How much text a line of a card may take. A title wraps to two because a
 --- service can be called `Home Assistant`; everything else on the card is one
@@ -178,22 +204,10 @@ local function renderLinkCard(view, card, index)
   local active = Visual.isHovered(key)
   local border, borderWidth = view.border(active)
 
-  local badge = size + BADGE_PADDING
-  local leading = ui.column({
-    width = badge,
-    height = badge,
-    radius = math.max(BADGE_MIN_RADIUS, math.floor(badge / 4)),
-    fill = "primary/0.12",
-    align = "center",
-    justify = "center",
-  }, {
-    ui.glyph({ name = card.glyph or "link", size = size + BADGE_GLYPH_OVERHANG, color = "primary" }),
-  })
-
   -- The title sits in the flexible column so the description, added after it,
   -- lands on the trailing edge instead of beside the title.
   local children = {
-    leading,
+    leadingTile(size, card),
     ui.column({ flexGrow = 1 }, {
       ui.label({
         text = card.title or card.id or NO_VALUE,
@@ -230,7 +244,7 @@ local function renderLinkCard(view, card, index)
     paddingH = sizes.cardPadH,
     paddingV = sizes.cardPadV,
     radius = view.radius(),
-    fill = active and view.hoverFill() or view.fill(),
+    fill = view.fill(active),
     border = border,
     borderWidth = borderWidth,
     onClick = onClick,
@@ -278,22 +292,6 @@ function M.renderCard(view, card, record, index)
   local stateColor = role.color
   local value = (record.text ~= nil and record.text ~= "") and record.text or NO_VALUE
 
-  local badge = size + BADGE_PADDING
-  local leading = ui.column({
-    width = badge,
-    height = badge,
-    radius = math.max(BADGE_MIN_RADIUS, math.floor(badge / 4)),
-    fill = "primary/0.12",
-    align = "center",
-    justify = "center",
-  }, {
-    ui.glyph({
-      name = card.glyph or Visual.KIND_GLYPH[card.kind] or "activity",
-      size = size + BADGE_GLYPH_OVERHANG,
-      color = "primary",
-    }),
-  })
-
   local lines = {
     ui.label({
       text = card.title or card.id or NO_VALUE,
@@ -338,9 +336,12 @@ function M.renderCard(view, card, record, index)
 
   -- The update count sits between the reading and the dot: it is a second reading
   -- about the same host, and it belongs on the reading side of the card (D27).
-  local badge = updatesBadge(view, card, record, size)
-  if badge ~= nil then
-    trailing[#trailing + 1] = badge
+  -- Named for what it is, not `badge` — that word was already the tile's
+  -- geometry, and one name for a number and a ui node is how the next reader
+  -- breaks the arithmetic.
+  local updatesNode = updatesBadge(view, card, record, size)
+  if updatesNode ~= nil then
+    trailing[#trailing + 1] = updatesNode
   end
 
   trailing[#trailing + 1] = marker
@@ -371,7 +372,7 @@ function M.renderCard(view, card, record, index)
   end
 
   local children = {
-    leading,
+    leadingTile(size, card),
     ui.column({ flexGrow = 1, gap = TITLE_GAP }, lines),
   }
   for _, node in ipairs(trailing) do
@@ -385,7 +386,7 @@ function M.renderCard(view, card, record, index)
     paddingH = sizes.cardPadH,
     paddingV = sizes.cardPadV,
     radius = view.radius(),
-    fill = active and view.hoverFill() or view.fill(),
+    fill = view.fill(active),
     border = border,
     borderWidth = borderWidth,
   })

@@ -120,9 +120,17 @@ end
 --- Only where a glyph is actually in the row. On a label that stands alone the
 --- same setting centres the x-height rather than the line, and a column of plain
 --- text starts to drift.
+---
+--- The props are copied rather than set in place: a function that mutates its
+--- argument is fine while every caller passes a literal, and a trap the first
+--- time one caller reuses a table it also reads from.
 function M.glyphLabel(props)
-  props.baseline = "pictographic"
-  return ui.label(props)
+  local out = {}
+  for key, value in pairs(props) do
+    out[key] = value
+  end
+  out.baseline = "pictographic"
+  return ui.label(out)
 end
 
 return M

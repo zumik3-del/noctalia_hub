@@ -40,6 +40,7 @@ local STATE_CONFIG = "hub.config"
 local STATE_CARDS = "hub.cards"
 local STATE_SUMMARY = "hub.summary"
 local STATE_FATAL = "hub.fatal"
+local STATE_CMD = "hub.cmd"
 
 --- Seeded from state in onOpen, kept current by the watches below.
 local doc = nil
@@ -66,7 +67,7 @@ local actionSeq = 0
 
 local function dispatchAction(action, target)
   actionSeq = actionSeq + 1
-  noctalia.state.set("hub.cmd", { action = action, target = target, seq = actionSeq })
+  noctalia.state.set(STATE_CMD, { action = action, target = target, seq = actionSeq })
 end
 
 -- ── visual language (docs/04-visual-language.md) ─────────────────────────────
@@ -107,11 +108,18 @@ local DENSITY = {
   comfortable = { valueSize = 13, zoneGap = 16, zonePadding = 14, rowGap = 6, cardPadH = 12, cardPadV = 9 },
 }
 
+--- The one place the view looks a layout up, and the one place it may fall back.
+--- `Config.DEFAULT_LAYOUT` rather than `{}`: `render()` bails out before any
+--- geometry is read when there is no document, so a fallback here is never taken
+--- for a card — but clockPattern() runs from onOpen, before the first document
+--- arrives, and an empty table would make that read nil. Every reader below is a
+--- plain read, which is what "every default comes from Config.DEFAULT_LAYOUT
+--- rather than being repeated here" means literally.
 local function layoutConf()
   if doc ~= nil and type(doc.layout) == "table" then
     return doc.layout
   end
-  return {}
+  return Config.DEFAULT_LAYOUT
 end
 
 --- `font_scale` is applied to every text size at render time. Keeping it a
@@ -121,11 +129,9 @@ end
 --- No clamp: config.luau already rejects a `font_scale` outside 80..130 as a
 --- config error, because pinning a typo to 130 hides the typo. Clamping here as
 --- well would draw the corrected value and show nothing in the config-errors
---- block, which is the one place the author looks. The `or` only covers a
---- document with no layout at all — see service.luau's fatal path.
+--- block, which is the one place the author looks.
 local function fontSize(size)
-  local scale = tonumber(layoutConf().fontScale) or Config.DEFAULT_LAYOUT.fontScale
-  return math.floor(size * scale / 100 + 0.5)
+  return math.floor(size * tonumber(layoutConf().fontScale) / 100 + 0.5)
 end
 
 local function style()
@@ -138,11 +144,11 @@ end
 --- drift, and it drifts silently — the panel keeps drawing while the schema
 --- documents something else.
 local function cardRadius()
-  return tonumber(layoutConf().cardRadius) or Config.DEFAULT_LAYOUT.cardRadius
+  return tonumber(layoutConf().cardRadius)
 end
 
 local function cardSpacing()
-  return tonumber(layoutConf().cardSpacing) or Config.DEFAULT_LAYOUT.cardSpacing
+  return tonumber(layoutConf().cardSpacing)
 end
 
 --- A card's fill is one of three theme states, never a colour. `tinted` and
@@ -159,25 +165,28 @@ local FILL_HOVER = "surface_variant/0.62"
 local BORDER_HIDDEN = "outline/0"
 local BORDER_SUBTLE = "outline/0.6"
 
-local function cardFill()
-  local mode = layoutConf().cardBackground or "tinted"
+--- `active` is whether the pointer is over this card, and the hover response is
+--- decided here rather than by the caller: `hover_effect` is a layout field, and
+--- the layer that owns `doc.layout` is this one. Reading it any further out meant
+--- `none` still brightened the card and `border` brightened it as well as
+--- claiming the accent border — the config asked for one response and got both,
+--- or asked for none and got one.
+local function cardFill(active)
+  local mode = layoutConf().cardBackground
   if mode == "transparent" then return "transparent" end
   if mode == "solid" then return FILL_SOLID end
+  if active and layoutConf().hoverEffect == "background" then
+    return FILL_HOVER
+  end
   return FILL_TINTED
-end
-
---- The hover highlight. One step brighter than `tinted`, still a palette role, so
---- the theme keeps control of the actual colour (docs/04 §1).
-local function hoverFill()
-  return FILL_HOVER
 end
 
 --- border, borderWidth. A hovered card claims the accent border only when the
 --- config asked for a border response; the state colour stays on the value and
 --- the status glyph, so a warning is never mistaken for a hover (D5, D24).
 local function cardBorder(active)
-  local mode = layoutConf().cardBorder or "subtle"
-  local hover = layoutConf().hoverEffect or "background"
+  local mode = layoutConf().cardBorder
+  local hover = layoutConf().hoverEffect
   if mode == "none" then return BORDER_HIDDEN, 0 end
   if active and hover == "border" then return "primary", 1 end
   if mode == "accent" then return "primary", 1 end
@@ -185,10 +194,7 @@ local function cardBorder(active)
 end
 
 local function clockPattern()
-  if doc ~= nil and doc.layout ~= nil and type(doc.layout.clock) == "string" then
-    return doc.layout.clock
-  end
-  return Config.DEFAULT_LAYOUT.clock
+  return layoutConf().clock
 end
 
 -- ── header (docs/02-layout.md) ───────────────────────────────────────────────
@@ -300,7 +306,7 @@ local function renderHeader(size, zonePadding)
       controlSize = "sm",
       tooltip = noctalia.tr("panel.refresh"),
       onClick = function()
-        noctalia.state.set("hub.cmd", "refresh")
+        dispatchAction("refresh")
       end,
     }),
     ui.button({
@@ -372,7 +378,6 @@ local function view()
     radius = cardRadius,
     spacing = cardSpacing,
     fill = cardFill,
-    hoverFill = hoverFill,
     border = cardBorder,
     secondary = SECONDARY,
     dimmed = DIMMED,
@@ -421,7 +426,7 @@ function render()
   -- one tab where an empty body is the intended state and not a missing config.
   -- The config-errors block above still draws there: a broken config must never
   -- hide behind a blank tab (docs/06-failure-modes.md).
-  if #(scrolling) == 0 and activeTab ~= OVERVIEW then
+  if #scrolling == 0 and activeTab ~= OVERVIEW then
     scrolling[1] = ui.column({ gap = sizes.rowGap, padding = zonePadding }, {
       ui.label({ text = noctalia.tr("zone.no_domains"), fontSize = size, color = DIMMED, maxLines = 2 }),
     })
@@ -507,8 +512,9 @@ function onKey(chord, pressed)
   if chord == "r" then
     -- A refresh is a request to the collector, not work done here: starting a
     -- process belongs behind the same boundary as polling, not in the view
-    -- (docs/05-architecture.md).
-    noctalia.state.set("hub.cmd", "refresh")
+    -- (docs/05-architecture.md). Through dispatchAction, so a second press is a
+    -- distinct write — see the comment on `actionSeq` above.
+    dispatchAction("refresh")
   end
 end
 

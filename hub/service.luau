@@ -85,7 +85,12 @@ local function newRecord(card)
     id = card.id,
     state = "pending",
     text = "",
-    fields = {},
+    -- Deliberately no `fields`: the pipeline formats the reading into `text`
+    -- before it arrives, and no surface draws the extracted fields — carrying
+    -- them would publish a payload nobody reads, and a bigger one to re-carry on
+    -- every reload. They stay in `reading.fields`, which is the pipeline's own
+    -- render input. A step-6 button building a `{tag}` placeholder needs them
+    -- back, and that is the change that earns the line.
     rowCount = 0,
     error = nil,
     -- A config problem is not a fetch problem: it is already true before the
@@ -115,7 +120,6 @@ local function adoptRecords()
         if previous ~= nil then
           record.state = previous.state
           record.text = previous.text
-          record.fields = previous.fields
           record.rowCount = previous.rowCount
           record.lastGoodAtMs = previous.lastGoodAtMs
           record.attempts = previous.attempts
@@ -303,7 +307,6 @@ local function applyReading(card, record, raw, err)
 
   record.state = reading.state
   record.text = reading.text
-  record.fields = reading.fields
   record.rowCount = reading.rowCount or 0
   record.lastGoodAtMs = nowMs()
 end
@@ -492,6 +495,15 @@ end
 
 noctalia.state.watch(STATE_CMD, function(command)
   if command == "refresh" then
+    refreshSoon()
+    return
+  end
+
+  -- The string form above is kept: the panel and this entry reload independently,
+  -- and a panel still writing the old shape during a hot reload must not lose its
+  -- refresh. Everything written today goes through dispatchAction, which is the
+  -- table form.
+  if type(command) == "table" and command.action == "refresh" then
     refreshSoon()
     return
   end

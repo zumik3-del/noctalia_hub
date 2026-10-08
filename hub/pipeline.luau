@@ -147,7 +147,7 @@ end
 ---   text    the value column, already formatted
 ---   rows    list cards only, bounded by max_items
 ---   error   a problem with the card itself, not with the world
-local function evaluate(card, raw)
+function M.evaluate(card, raw)
   local reading = { state = "pending", fields = {}, rows = nil, error = nil }
 
   if card.kind == "list" then
@@ -195,8 +195,6 @@ local function evaluate(card, raw)
   reading.text = render(card.format, reading.fields, card.unit)
   return reading
 end
-
-M.evaluate = evaluate
 
 -- ── fetch ────────────────────────────────────────────────────────────────────
 

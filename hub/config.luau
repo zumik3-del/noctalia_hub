@@ -138,13 +138,17 @@ end
 --- unsupported version — gets shown at all. `owner.errors` is how a card renders
 --- the problem under its own row instead of only in a block the reader has to go
 --- looking for.
+---
+--- A bare table with one `add`, not `newSink()` with the `add` replaced: the
+--- wrapped sink's `items` would sit there empty and look like a list somebody
+--- could read, and nothing ever did.
 local function ownedSink(sink, owner)
-  local owned = newSink()
-  owned.add = function(path, message)
-    sink.add(path, message)
-    owner.errors[#owner.errors + 1] = { path = path, message = message }
-  end
-  return owned
+  return {
+    add = function(path, message)
+      sink.add(path, message)
+      owner.errors[#owner.errors + 1] = { path = path, message = message }
+    end,
+  }
 end
 
 -- ── secret substitution ──────────────────────────────────────────────────────
@@ -316,11 +320,13 @@ end
 
 -- ── source ───────────────────────────────────────────────────────────────────
 
---- `static` and `command` are implemented in this build; the rest are
---- recognised so that a typo is still reported as a typo, and so the pipeline
---- can say "not built yet" rather than "no such type". See
---- docs/05-architecture.md build order.
-local BUILT_SOURCE_TYPES = { static = true, command = true }
+--- All five source types are accepted here, including the three that do not fetch
+--- yet: a typo has to stay a typo, and `Pipeline.fetch` is the one place that
+--- knows which types it can run — it answers "not implemented in this build"
+--- rather than "no such type". That knowledge is deliberately not duplicated
+--- here: an `implemented` flag on the parsed source was written and never read
+--- by anyone, and a second copy of the list is a second file to change when
+--- `http` lands.
 
 --- Required per type. Checked here so the error names the missing field rather
 --- than surfacing later as an empty reading. Module level because it is a
@@ -354,8 +360,8 @@ local function readSource(raw, path, sink)
     return nil
   end
 
-  -- Required per type. Checked here so the error names the missing field rather
-  -- than surfacing later as an empty reading.
+  -- Required per type. The message names the missing field rather than letting it
+  -- surface later as an empty reading.
   for _, field in ipairs(REQUIRED_FIELDS[kind]) do
     if raw[field] == nil then
       sink.add(path, "source type " .. kind .. " requires '" .. field .. "'")
@@ -386,7 +392,6 @@ local function readSource(raw, path, sink)
   return {
     type = kind,
     raw = raw,
-    implemented = BUILT_SOURCE_TYPES[kind] == true,
   }
 end
 
@@ -634,14 +639,32 @@ local function readCard(raw, path, seenIds, defaults, sink)
   -- presentation
   card.thresholds = readThresholds(raw.thresholds, path .. ".thresholds", own)
   card.valueMap = readMap(raw.map, path .. ".map", own)
-  card.unit = isString(raw.unit) and raw.unit or nil
+  -- These three used to be dropped in silence when the type was wrong, while
+  -- every neighbouring field reported. A `unit: 5` that vanishes is the failure
+  -- mode docs/04 §6 exists to prevent: the panel looks fine and the suffix is
+  -- simply missing (zones.luau says it out loud about config problems).
+  if raw.unit ~= nil then
+    if isString(raw.unit) and raw.unit ~= "" then
+      card.unit = raw.unit
+    else
+      add(path .. ".unit", "expected a non-empty suffix, e.g. \"%\"")
+    end
+  end
   card.maxItems = readPositive(raw.max_items, path .. ".max_items", own, M.DEFAULT_MAX_ITEMS)
 
-  if isString(raw.format) then
-    card.format = raw.format
+  if raw.format ~= nil then
+    if isString(raw.format) and raw.format ~= "" then
+      card.format = raw.format
+    else
+      add(path .. ".format", "expected a format string, e.g. \"{n}\"")
+    end
   end
-  if isString(raw.row_format) then
-    card.rowFormat = raw.row_format
+  if raw.row_format ~= nil then
+    if isString(raw.row_format) and raw.row_format ~= "" then
+      card.rowFormat = raw.row_format
+    else
+      add(path .. ".row_format", "expected a format string, e.g. \"{feed}  {title}\"")
+    end
   end
 
   if raw.graph ~= nil then
@@ -762,13 +785,15 @@ function M.build(doc, secrets)
 
   if not isTable(doc) then
     sink.add("<document>", "expected a mapping at the top level")
+    -- A model with no domains and the schema's own layout: the panel renders this
+    -- rather than showing nothing, because a config that cannot be read is itself
+    -- something the panel reports (docs/06-failure-modes.md). No `defaults` and no
+    -- `fatal` — nothing reads either, and a field no surface draws is a field that
+    -- will be wrong the day somebody starts drawing it.
     return {
-      version = 0,
       layout = DEFAULT_LAYOUT,
-      defaults = DEFAULT_DEFAULTS,
       domains = {},
       errors = sink.items,
-      fatal = true,
     }
   end
 
@@ -789,6 +814,10 @@ function M.build(doc, secrets)
   doc = substitute(doc, "<document>", secrets, sink)
 
   local layout = readLayout(doc.layout, sink)
+  -- `defaults` is validated for its errors and never returned: every value in it
+  -- is already baked into the cards and domains below, so a copy on the model
+  -- would be the same numbers a second time, waiting to be read by someone who
+  -- then has two places to keep in step.
   local defaults = readDefaults(doc.defaults, sink)
 
   local domains = {}
@@ -830,9 +859,7 @@ function M.build(doc, secrets)
   end
 
   return {
-    version = 1,
     layout = layout,
-    defaults = defaults,
     domains = domains,
     errors = sink.items,
   }

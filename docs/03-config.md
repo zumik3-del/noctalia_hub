@@ -173,7 +173,7 @@ domains:
 | `card_spacing` | `8` | `0`–`32` px. Gap between cards inside a zone. |
 | `card_border` | `subtle` | `none`, `subtle` or `accent`. Border of a card block. |
 | `card_background` | `tinted` | `transparent`, `tinted` or `solid`. Fill of a card block; always a theme role, never a colour. |
-| `hover_effect` | `background` | `none`, `background` or `border`. Response while the pointer is over a card. |
+| `hover_effect` | `background` | `none`, `background` or `border`. Response while the pointer is over a card: `background` brightens the fill, `border` claims the accent border, `none` does not react. One response, never two. |
 | `show_header` | `true` | Accepted and validated, **not yet honoured** in this build (the header always draws). |
 | `stale_badge` | `true` | Accepted and validated, **not yet honoured** in this build (the age line always draws). |
 
@@ -277,6 +277,12 @@ broken.
 **A placeholder with nothing to put in it stays visible.** `"{n} nodes"` with no
 extracted value renders as `{n} nodes`, not as ` nodes`. An empty string reads as
 a service with zero nodes; the broken template reads as a broken template.
+
+**`format`, `unit` and `row_format` must be non-empty strings.** A wrong type is a
+config error, not a field dropped in silence: a `unit: 5` that vanished would leave
+the panel looking correct while the suffix was simply missing, which is the failure
+mode the config-errors block exists to prevent
+([04](04-visual-language.md) §6).
 
 `thresholds` must have `warn` below `critical`, and the validator says so rather
 than accepting a card whose amber is unreachable.
