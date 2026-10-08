@@ -793,7 +793,7 @@ source:
   type: http
   url: https://api.example.com/status
   method: GET              # defaults to GET
-  headers: ["Authorization: Bearer ${api_token}"]
+  headers: ["Authorization: Bearer ${api_token}"]   # see the note below
   auth: { token: "${proxmox_token}" }
   body: ""
   follow_redirects: true
@@ -803,6 +803,14 @@ source:
   select: ["id", "code"]         # request only these fields, where supported
   extract: ".data | length"
 ```
+
+`headers` and `auth` are where the whole-value rule in §Secrets bites: the
+substitution does not reach inside a string, so `"Bearer ${api_token}"` would go
+out as those literal characters. The http build has to decide there — a way to
+spell a prefix separately from the token, so the token stays one whole value —
+and it is a schema decision for the build that draws the card, not one to guess
+at now. This build implements `static` and `command` only; `http` is validated
+and reported as not built.
 
 `query` is a convenience for APIs that take query-string parameters. It is
 URL-encoded for you, so write `&` and spaces normally. `extract` is applied to the
@@ -1057,6 +1065,20 @@ auth: { token: "${proxmox_token}" }   # correct
 
 The alternative — `${ENV_VAR}` read from the environment — needs a correctly
 configured user unit for autostart and is fragile. The file is more dependable.
+
+**Only a whole value is substituted.** `token: "${name}"` becomes the secret;
+`"Bearer ${name}"` does not — the reference has to be the entire value. The
+reason is `run:`, which is a shell string and whose own `${VAR}` and `$(cmd)`
+belong to that shell, not to this file (see D12). A substitution that reached
+inside strings would have to decide which `${...}` is the user's shell and which
+is the panel's, and a heuristic that guesses wrong either leaks a token into a
+command line or eats a shell variable the user meant to keep. So the boundary is
+exact and it is this: write the reference alone, or use it where a literal
+`${name}` in the output costs nothing.
+
+An unknown name is reported against the path it was found at, and the literal is
+left in place rather than blanked — a config that says `${ghost}` on screen is
+telling the truth about a name `hub.secrets.yaml` does not have.
 
 ## Hot reload
 

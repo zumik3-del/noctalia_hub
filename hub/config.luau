@@ -138,6 +138,14 @@ end
 
 -- ── secret substitution ──────────────────────────────────────────────────────
 
+--- A reference that is the *whole* value. This is a scanner only for that shape,
+--- and deliberately so: a `run:` string legitimately contains shell `${VAR}`
+--- (D12), and a scanner that reached inside strings would flag every one of them
+--- as a missed secret. So the rule is exact and the price is known — an embedded
+--- `Bearer ${xyops_key}` is left literal and shows up as a broken header, which
+--- docs/03-config.md says out loud. Fixing that would need a policy about which
+--- `${...}` is the user's shell and which is the panel's, and a heuristic that
+--- guesses wrong is worse than a boundary that is written down.
 local SECRET_PATTERN = "^%${([%w_]+)}$"
 
 --- Replaces `${name}` in every string. Walked before validation so that a card
@@ -152,7 +160,7 @@ local function substitute(value, path, secrets, sink)
     end
     local found = secrets[name]
     if found == nil then
-      sink.add(path, "unknown secret \"${" .. name .. "}\" (" .. M.secretsFile .. " has no such key)")
+      sink.add(path, "unknown secret \"${" .. name .. "}\" — " .. M.secretsFile .. " has no such key, and only a value that is exactly one ${name} is substituted (docs/03-config.md)")
       return value
     end
     if not isString(found) then
@@ -833,10 +841,15 @@ function M.stamp()
   return table.concat(parts, "|")
 end
 
---- yq converts YAML to JSON once per file change and the JSON is cached in the
---- plugin data dir, so the price of YAML is paid at load rather than per render
---- (D2). The cache is keyed on mtime and size, which is what makes a later hot
---- reload a stat() rather than a guess.
+--- yq converts YAML to JSON once per file change and the JSON can be cached in
+--- the plugin data dir, so the price of YAML is paid at load rather than per
+--- render (D2). The cache is keyed on mtime and size, which is what makes a
+--- later hot reload a stat() rather than a guess.
+---
+--- `cachePath` is nil for a file that must not leave a second copy on disk:
+--- hub.secrets.yaml holds tokens, and a cached JSON of the same tokens is the
+--- same leak with a friendlier extension. hub.yaml is public — it is committed —
+--- so it still caches.
 local function convertToJson(path, cachePath, done)
   local info = noctalia.fileInfo(path)
   if info == nil then
@@ -924,7 +937,11 @@ function M.read(onDone)
         return
       end
 
-      convertToJson(secretPath, cacheDir and (cacheDir .. "/hub.secrets.json"), function(secretsJson, secretsErr)
+      -- No cache for the secrets file: the converted JSON carries the same
+      -- tokens, and writing it next to hub.json leaves them on disk in two
+      -- places. Re-reading them is a yq run per config change, which the
+      -- collector already pays for hub.yaml.
+      convertToJson(secretPath, nil, function(secretsJson, secretsErr)
         if secretsJson == nil then
           onDone(nil, tostring(secretsErr))
           return
