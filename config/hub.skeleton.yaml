@@ -42,9 +42,10 @@ defaults:
 
 domains:
 
-  # ── Instruments ────────────────────────────────────────────────────────────
-  # The panel's reason to exist: what is this thing, is it alive, and is the
-  # number it reports one you have to look at.
+  # ── Services ───────────────────────────────────────────────────────────────
+  # What is this thing, is it alive, and can I get into it. Each real service is
+  # a reachability dot with a link and a terminal — except the router, which has
+  # no useful state to poll and no shell to enter, so it is a bookmark.
   - id: services
     title: Services
     glyph: server
@@ -54,9 +55,9 @@ domains:
       - id: gateway
         title: Gateway
         glyph: router
-        kind: status
+        kind: link
         description: Keenetic, gateway and routing
-        source: { type: static, value: running }
+        link: http://192.168.1.1/
 
       # The host itself, not a service in a container: the probe is the web UI at
       # the URL a browser uses, and the terminal is a plain ssh into the node. No
@@ -123,24 +124,6 @@ domains:
             argv: ["ssh", "proxmox", "pct exec 118 -- sh -c 'apt-get update -qq >/dev/null || exit 1; apt-get -s -q upgrade | grep -c ^Inst || true'"]
           run: "ssh -t proxmox 'pct exec 118 -- sh -c \"apt-get update && apt-get -y upgrade\"'"
 
-      - id: storage
-        title: Storage
-        glyph: database
-        kind: status
-        source: { type: static, value: running }
-
-      # `map` answers "what does this value mean" — see docs/03-config.md. A value
-      # the map does not list is `down` with the reason attached, never a guess.
-      - id: dns
-        title: DNS
-        glyph: world
-        kind: status
-        source: { type: static, value: degraded }
-        map:
-          running: ok
-          degraded: warn
-          stopped: down
-
       # The first card that is not static: it asks the service over HTTPS, so the
       # dot is a real reading. No login is attempted and the redirect to Authelia
       # counts as reachable — the question is "is the host answering", not "can we
@@ -181,42 +164,224 @@ domains:
             argv: ["ssh", "proxmox", "pct exec 100 -- sh -c 'apt-get update -qq >/dev/null || exit 1; apt-get -s -q upgrade | grep -c ^Inst || true'"]
           run: "ssh -t proxmox 'pct exec 100 -- sh -c \"apt-get update && apt-get -y upgrade\"'"
 
-      # `format` and `unit` are the value column. `{n}` is the extracted value.
-      - id: nodes
-        title: Nodes
-        glyph: hexagon
-        kind: metric
-        span: 2
-        source: { type: static, value: 3 }
-        format: "{n} nodes"
-        thresholds: { warn: 6, critical: 8 }
-        graph: true
+      # The rest of the stack, taken from the dynacat dashboard's monitor groups.
+      # Every card is the same shape: an HTTPS probe, the admin link, a `pct
+      # enter` terminal into its LXC, and the Debian/Ubuntu update badge — except
+      # where there is no LXC of its own (a note on each).
 
-      # A metric without thresholds is a config error (D10): a green 38% says
-      # nothing about whether 38% is nominal.
-      - id: backup-age
-        title: Backup age
-        glyph: archive
-        kind: metric
-        source: { type: static, value: 7 }
-        format: "{n}"
-        unit: "h"
-        thresholds: { warn: 24, critical: 72 }
-
-      # kind: list collapses to a count. Expansion on Enter lands with step 8;
-      # a static list is here so the count is visible before then.
-      - id: routes
-        title: routes
-        glyph: route
-        kind: list
-        max_items: 6
-        format: "{n} sites"
+      - id: jellyfin
+        title: Jellyfin
+        glyph: device-tv
+        kind: status
+        description: Media library and streaming
+        link: https://jellyfin.home.lan/
+        run: "ssh -t proxmox 'pct enter 107'"
         source:
-          type: static
-          value:
-            - dynacat.home.lan
-            - grafana.home.lan
-            - ops.home.lan
+          type: command
+          argv: ["curl", "-k", "-sS", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "3", "https://jellyfin.home.lan/"]
+        updates:
+          interval_sec: 3600
+          source:
+            type: command
+            argv: ["ssh", "proxmox", "pct exec 107 -- sh -c 'apt-get update -qq >/dev/null || exit 1; apt-get -s -q upgrade | grep -c ^Inst || true'"]
+          run: "ssh -t proxmox 'pct exec 107 -- sh -c \"apt-get update && apt-get -y upgrade\"'"
+
+      - id: vaultwarden
+        title: Vaultwarden
+        glyph: lock
+        kind: status
+        description: Password manager
+        link: https://vault.home.lan/
+        run: "ssh -t proxmox 'pct enter 102'"
+        source:
+          type: command
+          argv: ["curl", "-k", "-sS", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "3", "https://vault.home.lan/"]
+        updates:
+          interval_sec: 3600
+          source:
+            type: command
+            argv: ["ssh", "proxmox", "pct exec 102 -- sh -c 'apt-get update -qq >/dev/null || exit 1; apt-get -s -q upgrade | grep -c ^Inst || true'"]
+          run: "ssh -t proxmox 'pct exec 102 -- sh -c \"apt-get update && apt-get -y upgrade\"'"
+
+      - id: oxicloud
+        title: OXICloud
+        glyph: cloud
+        kind: status
+        description: Cloud storage
+        link: https://oxicloud.home.lan/
+        run: "ssh -t proxmox 'pct enter 111'"
+        source:
+          type: command
+          argv: ["curl", "-k", "-sS", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "3", "https://oxicloud.home.lan/"]
+        updates:
+          interval_sec: 3600
+          source:
+            type: command
+            argv: ["ssh", "proxmox", "pct exec 111 -- sh -c 'apt-get update -qq >/dev/null || exit 1; apt-get -s -q upgrade | grep -c ^Inst || true'"]
+          run: "ssh -t proxmox 'pct exec 111 -- sh -c \"apt-get update && apt-get -y upgrade\"'"
+
+      # Home Assistant is a VM (`haos`), not an LXC: no `pct enter` and no
+      # container package list, so it is probe and link only.
+      - id: home-assistant
+        title: Home Assistant
+        glyph: home-cog
+        kind: status
+        description: Smart home
+        link: https://ha.home.lan/
+        source:
+          type: command
+          argv: ["curl", "-k", "-sS", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "3", "https://ha.home.lan/"]
+
+      - id: gotify
+        title: Gotify
+        glyph: bell
+        kind: status
+        description: Notification service
+        link: https://gotify.home.lan/
+        run: "ssh -t proxmox 'pct enter 105'"
+        source:
+          type: command
+          argv: ["curl", "-k", "-sS", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "3", "https://gotify.home.lan/"]
+        updates:
+          interval_sec: 3600
+          source:
+            type: command
+            argv: ["ssh", "proxmox", "pct exec 105 -- sh -c 'apt-get update -qq >/dev/null || exit 1; apt-get -s -q upgrade | grep -c ^Inst || true'"]
+          run: "ssh -t proxmox 'pct exec 105 -- sh -c \"apt-get update && apt-get -y upgrade\"'"
+
+      # Forgejo is Alpine, so its update check is apk's, written out (D17, D28).
+      - id: forgejo
+        title: Forgejo
+        glyph: git-fork
+        kind: status
+        description: Git repositories
+        link: https://forgejo.home.lan/
+        run: "ssh -t proxmox 'pct enter 116'"
+        source:
+          type: command
+          argv: ["curl", "-k", "-sS", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "3", "https://forgejo.home.lan/"]
+        updates:
+          interval_sec: 3600
+          source:
+            type: command
+            argv: ["ssh", "proxmox", "pct exec 116 -- sh -c 'apk update -q >/dev/null 2>&1 || exit 1; apk version -l \"<\" | grep -c \"<\" || true'"]
+          run: "ssh -t proxmox 'pct exec 116 -- sh -c \"apk update && apk upgrade\"'"
+
+      - id: opencode
+        title: Opencode
+        glyph: code
+        kind: status
+        description: AI coding assistant
+        link: https://opencode.home.lan/
+        run: "ssh -t proxmox 'pct enter 117'"
+        source:
+          type: command
+          argv: ["curl", "-k", "-sS", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "3", "https://opencode.home.lan/"]
+        updates:
+          interval_sec: 3600
+          source:
+            type: command
+            argv: ["ssh", "proxmox", "pct exec 117 -- sh -c 'apt-get update -qq >/dev/null || exit 1; apt-get -s -q upgrade | grep -c ^Inst || true'"]
+          run: "ssh -t proxmox 'pct exec 117 -- sh -c \"apt-get update && apt-get -y upgrade\"'"
+
+      # Subagentix lives inside the opencode LXC (117), so its terminal enters
+      # that container. It has no LXC of its own, so the update badge stays on
+      # Opencode rather than being drawn twice for the same host.
+      - id: subagentix
+        title: Subagentix
+        glyph: timeline
+        kind: status
+        description: Opencode session retrospectives (Gantt)
+        link: https://subagentix.home.lan/
+        run: "ssh -t proxmox 'pct enter 117'"
+        source:
+          type: command
+          argv: ["curl", "-k", "-sS", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "3", "https://subagentix.home.lan/"]
+
+      - id: bambuddy
+        title: Bambuddy
+        glyph: printer
+        kind: status
+        description: 3D printing control
+        link: https://bambu.home.lan/
+        run: "ssh -t proxmox 'pct enter 110'"
+        source:
+          type: command
+          argv: ["curl", "-k", "-sS", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "3", "https://bambu.home.lan/"]
+        updates:
+          interval_sec: 3600
+          source:
+            type: command
+            argv: ["ssh", "proxmox", "pct exec 110 -- sh -c 'apt-get update -qq >/dev/null || exit 1; apt-get -s -q upgrade | grep -c ^Inst || true'"]
+          run: "ssh -t proxmox 'pct exec 110 -- sh -c \"apt-get update && apt-get -y upgrade\"'"
+
+      - id: homelable
+        title: Homelable
+        glyph: devices
+        kind: status
+        description: Equipment inventory
+        link: https://homelable.home.lan/
+        run: "ssh -t proxmox 'pct enter 113'"
+        source:
+          type: command
+          argv: ["curl", "-k", "-sS", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "3", "https://homelable.home.lan/"]
+        updates:
+          interval_sec: 3600
+          source:
+            type: command
+            argv: ["ssh", "proxmox", "pct exec 113 -- sh -c 'apt-get update -qq >/dev/null || exit 1; apt-get -s -q upgrade | grep -c ^Inst || true'"]
+          run: "ssh -t proxmox 'pct exec 113 -- sh -c \"apt-get update && apt-get -y upgrade\"'"
+
+      - id: pocketbase
+        title: PocketBase
+        glyph: database
+        kind: status
+        description: Backend and database
+        link: https://pocketbase.home.lan/_/
+        run: "ssh -t proxmox 'pct enter 104'"
+        source:
+          type: command
+          argv: ["curl", "-k", "-sS", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "3", "https://pocketbase.home.lan/_/"]
+        updates:
+          interval_sec: 3600
+          source:
+            type: command
+            argv: ["ssh", "proxmox", "pct exec 104 -- sh -c 'apt-get update -qq >/dev/null || exit 1; apt-get -s -q upgrade | grep -c ^Inst || true'"]
+          run: "ssh -t proxmox 'pct exec 104 -- sh -c \"apt-get update && apt-get -y upgrade\"'"
+
+      - id: xyops
+        title: XYOPS
+        glyph: settings-automation
+        kind: status
+        description: Automation and plugins
+        link: https://xyops.home.lan/
+        run: "ssh -t proxmox 'pct enter 109'"
+        source:
+          type: command
+          argv: ["curl", "-k", "-sS", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "3", "https://xyops.home.lan/"]
+        updates:
+          interval_sec: 3600
+          source:
+            type: command
+            argv: ["ssh", "proxmox", "pct exec 109 -- sh -c 'apt-get update -qq >/dev/null || exit 1; apt-get -s -q upgrade | grep -c ^Inst || true'"]
+          run: "ssh -t proxmox 'pct exec 109 -- sh -c \"apt-get update && apt-get -y upgrade\"'"
+
+      - id: chronix
+        title: Chronix
+        glyph: history
+        kind: status
+        description: Log store and event viewer
+        link: https://chronix.home.lan/
+        run: "ssh -t proxmox 'pct enter 108'"
+        source:
+          type: command
+          argv: ["curl", "-k", "-sS", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "3", "https://chronix.home.lan/"]
+        updates:
+          interval_sec: 3600
+          source:
+            type: command
+            argv: ["ssh", "proxmox", "pct exec 108 -- sh -c 'apt-get update -qq >/dev/null || exit 1; apt-get -s -q upgrade | grep -c ^Inst || true'"]
+          run: "ssh -t proxmox 'pct exec 108 -- sh -c \"apt-get update && apt-get -y upgrade\"'"
 
 
   # ── Releases ───────────────────────────────────────────────────────────────
