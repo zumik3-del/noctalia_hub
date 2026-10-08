@@ -123,6 +123,25 @@ local function adoptRecords()
   cards = adopted
 end
 
+--- Every card in the document, with the runtime record that carries its reading.
+--- The zone level is a fact about the config's shape, not something the collector
+--- wants, and walking domains→cards→records was written out three times before
+--- this existed. A card whose id failed validation has no record and is skipped
+--- rather than given a fake one: it is already a config error on screen.
+local function eachCard(fn)
+  if doc == nil then
+    return
+  end
+  for _, domain in ipairs(doc.domains) do
+    for _, card in ipairs(domain.cards) do
+      local record = cards[card.id]
+      if record ~= nil then
+        fn(card, record)
+      end
+    end
+  end
+end
+
 -- ── publishing ───────────────────────────────────────────────────────────────
 
 --- The panel redraws whenever a watched key is written, so a write that changes
@@ -393,16 +412,9 @@ local function tick(stamp)
     return
   end
 
-  if doc ~= nil then
-    for _, domain in ipairs(doc.domains) do
-      for _, card in ipairs(domain.cards) do
-        local record = cards[card.id]
-        if record ~= nil then
-          tickCard(card, record, stamp)
-        end
-      end
-    end
-  end
+  eachCard(function(card, record)
+    tickCard(card, record, stamp)
+  end)
 
   publish()
 end
@@ -418,20 +430,12 @@ end
 --- every card due on the next tick is the whole of it — this does not bypass
 --- `stale_after_sec`, it just does not wait for the next scheduled poll.
 local function refreshSoon()
-  if doc == nil then
-    return
-  end
-  for _, domain in ipairs(doc.domains) do
-    for _, card in ipairs(domain.cards) do
-      local record = cards[card.id]
-      if record ~= nil then
-        record.nextDueAtMs = 0
-        if record.updates ~= nil then
-          record.updates.nextDueAtMs = 0
-        end
-      end
+  eachCard(function(_card, record)
+    record.nextDueAtMs = 0
+    if record.updates ~= nil then
+      record.updates.nextDueAtMs = 0
     end
-  end
+  end)
 end
 
 --- A card's trailing buttons ask the collector to act, the way refresh does:
@@ -497,14 +501,11 @@ load = function()
       adoptRecords()
       -- Config errors are true before the first poll and stay true until the
       -- file changes, so they are attached once here instead of every poll.
-      for _, domain in ipairs(model.domains) do
-        for _, card in ipairs(domain.cards) do
-          local record = cards[card.id]
-          if record ~= nil and #card.errors > 0 then
-            record.configError = card.errors[1].message
-          end
+      eachCard(function(card, record)
+        if #card.errors > 0 then
+          record.configError = card.errors[1].message
         end
-      end
+      end)
     end
 
     publishedSignature = nil

@@ -16,6 +16,8 @@
   Documentation: docs/03-config.md.  Rationale: docs/07-decisions.md.
 ]]
 
+local Util = require("./util.luau")
+
 local M = {}
 
 --- The config directory, per docs/03-config.md. Overridable with NOCTALIA_CONFIG_HOME.
@@ -35,7 +37,10 @@ local SOURCESET = {}
 for _, sourceType in ipairs(M.SOURCE_TYPES) do SOURCESET[sourceType] = true end
 
 --- Defaults for every optional field, per the schema tables in docs/03-config.md.
-local DEFAULT_LAYOUT = {
+--- Exported so the panel reads one card radius and the pipeline one `max_items`,
+--- instead of each keeping its own copy of the same number. The copy is what
+--- drifts: a default written twice is a default someone will change in one place.
+M.DEFAULT_LAYOUT = {
   density = "compact",
   showHeader = true,
   clock = "%H:%M:%S",
@@ -51,6 +56,9 @@ local DEFAULT_LAYOUT = {
   hoverEffect = "background",
 }
 
+--- The rest of this file reads it by its short name; the export is above.
+local DEFAULT_LAYOUT = M.DEFAULT_LAYOUT
+
 local DEFAULT_DEFAULTS = {
   intervalSec = 60,
   timeoutMs = 8000,
@@ -60,13 +68,8 @@ local DEFAULT_DEFAULTS = {
 
 -- ── small helpers ────────────────────────────────────────────────────────────
 
-local function isString(v)
-  return type(v) == "string"
-end
-
-local function isNumber(v)
-  return type(v) == "number" and v == v -- NaN never equals itself
-end
+local isString = Util.isString
+local isNumber = Util.isNumber
 
 local function isBool(v)
   return type(v) == "boolean"

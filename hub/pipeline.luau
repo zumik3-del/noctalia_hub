@@ -2,11 +2,9 @@
 --[[
   fetch -> extract -> map -> format.
 
-  One chain for every card, whatever the source is (D4). `kind` never appears in
-  this file: it decides how the panel draws a reading, not how the reading is
-  obtained. The two places `kind` is read here are `list` (whose extract widens
-  to many) and the metric/list split in evaluate(), and both are about the shape
-  of the value rather than the source that produced it.
+  One chain for every card, whatever the source is (D4). `kind` appears exactly
+  once in this file: a `list` card widens its extract to many rows in evaluate(),
+  which is about the shape of the value rather than the source that produced it.
 
     Pipeline.fetch(card, done)     IO.  done(raw, err)
     Pipeline.evaluate(card, raw)   pure. Returns a reading, never raises.
@@ -14,24 +12,24 @@
   Documentation: docs/03-config.md.  Rationale: docs/07-decisions.md.
 ]]
 
+local Util = require("./util.luau")
+
 local M = {}
 
---- Reading order for traversal and for the summary counts: a failure is worth
---- more attention than a nominal reading (D8). `pending` sits with `ok` — it is
---- not a problem, it is an absence of one.
-M.RANK = { down = 1, warn = 2, stale = 3, ok = 4, pending = 5 }
+local isNumber = Util.isNumber
 
 -- ── value → text ─────────────────────────────────────────────────────────────
-
-local function isNumber(v)
-  return type(v) == "number" and v == v
-end
 
 --- JSON gives back doubles, and Lua prints a whole double as "3.0" in some
 --- hosts and "3" in others. A map key or a rendered metric must not depend on
 --- which host rendered it, so whole numbers are formatted explicitly.
+---
+--- The bound is the same idea as `max_items`: a double is exact as an integer up
+--- to 2^53, and past that `string.format("%d")` is guessing.
+local WHOLE_NUMBER_LIMIT = 1e15
+
 local function numberText(v)
-  if v == math.floor(v) and math.abs(v) < 1e15 then
+  if v == math.floor(v) and math.abs(v) < WHOLE_NUMBER_LIMIT then
     return string.format("%d", v)
   end
   return tostring(v)
@@ -205,9 +203,7 @@ end
 
 -- ── fetch ────────────────────────────────────────────────────────────────────
 
-local function isString(v)
-  return type(v) == "string"
-end
+local isString = Util.isString
 
 local function trim(text)
   return (tostring(text):gsub("^%s+", ""):gsub("%s+$", ""))
