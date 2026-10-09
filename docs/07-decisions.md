@@ -1031,12 +1031,13 @@ feature only some have.
 `source → fetch → evaluate` chain unchanged: `readSource` validates it,
 `Pipeline.fetch` and `Pipeline.evaluate` run it, and `thresholds` colour it and
 `unit` suffixes it the way they do a card's reading — no second extractor, no
-second state machine. A tile with no thresholds has no `ok` to show, so its number
-draws in the neutral column colour; a failure is `down` regardless, which is D10's
-rule one row down. It gets its own interval (3600 by default) and its own record
-nested in the card's, the way `updates` is (D27). No staleness: a mini-card has no
-`stale_after_sec`, so it is either fresh or `down`, and a failed fetch keeps the
-last good value with the reason on the tooltip (D7).
+second state machine. A tile draws in colour only when something is wrong: `warn`
+and `down` take the state colour and `ok` is neutral, whether a threshold produced
+it or not — a green "0 failed" is noise, and D10's rule read one row down. It gets
+its own interval (3600 by default) and its own record nested in the card's, the way
+`updates` is (D27). No staleness: a mini-card has no `stale_after_sec`, so it is
+either fresh or `down`, and a failed fetch keeps the last good value with the reason
+on the tooltip (D7).
 
 **Rejected.**
 

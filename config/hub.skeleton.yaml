@@ -374,6 +374,18 @@ domains:
                 - sh
                 - "${xyops_key}"
             interval_sec: 3600
+          - label: failed
+            thresholds: { critical: 1 }
+            source:
+              type: command
+              argv:
+                - sh
+                - -c
+                - |-
+                  curl -k -sS --max-time 5 -H "X-API-Key: $1" https://xyops.home.lan/api/app/dash_stats/v1 | jq -r '.stats.day.transactions.job_error // 0'
+                - sh
+                - "${xyops_key}"
+            interval_sec: 3600
         source:
           type: command
           argv: ["curl", "-k", "-sS", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "3", "https://xyops.home.lan/"]

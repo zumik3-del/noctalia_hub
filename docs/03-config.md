@@ -293,10 +293,11 @@ the thresholds, the way it colours a card's reading. Before the first fetch the 
 shows the shared placeholder, and a failed fetch keeps the last good value with the
 reason on the tooltip ([D30](07-decisions.md)).
 
-**A tile without `thresholds` draws in the neutral column colour.** Without a
-threshold, `ok` says only that the fetch worked; a green number would claim more
-than the reading does. A failure is the exception: it is `down` whatever the config
-said. A tile's `label` is drawn upper-case, like a zone title.
+**A tile speaks in colour only when something is wrong.** `warn` and `down` take
+the state colour; everything else — including the `ok` a threshold produces —
+draws in the neutral column colour a static tile uses. A green number for "nothing
+failed" is noise, and without a threshold `ok` means even less. A tile's `label` is
+drawn upper-case, like a zone title.
 
 `thresholds` must have `warn` below `critical`, and the validator says so rather
 than accepting a card whose amber is unreachable.
@@ -895,6 +896,11 @@ own text — stderr first, then stdout — goes in the card; exit codes are neve
 to states ([06](06-failure-modes.md)). On success the reading is stdout, or the
 decoded JSON when `parse: json` is set. `parse: stderr` reads the other stream for
 the tools that report what you want there.
+
+**A count arrives as text.** stdout is a string, so `"2"` is not a number to the
+pipeline. Where a card or a tile carries `thresholds`, a numeric string is read as a
+number; a string the config did not ask to compare is left as it came, so a word or
+a version still renders.
 
 Executed directly, no shell:
 

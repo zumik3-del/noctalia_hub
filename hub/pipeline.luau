@@ -181,6 +181,15 @@ function M.evaluate(card, raw)
     return reading
   end
 
+  -- A `command` yields text, and a count arrives as "2". Where the config asks
+  -- for a threshold the reading has to be a number, so a numeric string becomes
+  -- one here. A string the config did not ask to compare is left as it came: a
+  -- reading may be a word, and `tonumber("01234")` is 1234, not a ZIP code.
+  if card.thresholds ~= nil and type(raw) == "string" then
+    local n = tonumber(raw)
+    if n ~= nil then raw = n end
+  end
+
   reading.fields = fieldsFor(raw)
 
   local state, reason = stateFor(card, raw)

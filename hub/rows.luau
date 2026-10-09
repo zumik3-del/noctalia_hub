@@ -182,14 +182,13 @@ local function miniCardsRow(view, card, record, size)
       if miniRecord ~= nil then
         text = (miniRecord.text ~= nil and miniRecord.text ~= "") and miniRecord.text or NO_VALUE
         tooltip = miniRecord.error
-        -- Colour is semantic only where the config made it so. A tile with
-        -- thresholds earns the state colour, and a failure earns `down` whatever
-        -- the config said. Without thresholds "ok" says only that the fetch
-        -- worked, so the number draws in the neutral column colour a static tile
-        -- uses — a green number there would claim more than the reading does.
-        if mini.thresholds ~= nil or miniRecord.state == "warn" or miniRecord.state == "down" then
-          local role = Visual.STATE_ROLES[miniRecord.state] or Visual.STATE_ROLES.pending
-          color = role.color
+        -- A tile speaks in colour only when something is wrong: `warn` and
+        -- `down` take the state colour, and everything else — including the `ok`
+        -- a threshold produces — draws in the neutral column colour a static
+        -- tile uses. A green number for "nothing failed" is noise, and without a
+        -- threshold `ok` means even less.
+        if miniRecord.state == "warn" or miniRecord.state == "down" then
+          color = Visual.STATE_ROLES[miniRecord.state].color
         else
           color = view.secondary
         end
