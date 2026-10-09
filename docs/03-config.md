@@ -267,7 +267,7 @@ to care. A card whose value is a string is matched on that string.
 | `format` | Substitution template, e.g. `"{n} nodes"` |
 | `unit` | Suffix: `"%"`, `"ms"`, `"MB"` |
 | `graph` | `true` / a point count / `false` |
-| `mini_cards` | A list of `{ label, value, unit? }` (static) or `{ label, source, unit?, thresholds?, interval_sec? }` (dynamic) — the card's own second row of facts, drawn as small tiles on the trailing edge, left of the update badge |
+| `mini_cards` | A list of `{ label, value, unit?, link? }` (static) or `{ label, source, unit?, thresholds?, interval_sec?, link? }` (dynamic) — the card's own second row of facts, drawn as small tiles on the trailing edge, left of the update badge |
 
 `format` placeholders are plain field names: `{n}` for the extracted value, plus
 any key of a mapping value and, on a `list` card, the count. `{n}`, `{0}` and
@@ -291,7 +291,9 @@ an optional `unit` (a suffix such as `"%"`), `thresholds` and `interval_sec`: th
 collector fetches it on its own interval (3600 by default) and colours the value by
 the thresholds, the way it colours a card's reading. Before the first fetch the tile
 shows the shared placeholder, and a failed fetch keeps the last good value with the
-reason on the tooltip ([D30](07-decisions.md)).
+reason on the tooltip ([D30](07-decisions.md)). A tile carrying `link` is a button:
+clicking it opens the URL the same way a card's own link button does
+([D26](07-decisions.md)).
 
 **A tile speaks in colour only when something is wrong.** `warn` and `down` take
 the state colour; everything else — including the `ok` a threshold produces —

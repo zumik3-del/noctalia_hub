@@ -376,6 +376,7 @@ domains:
             interval_sec: 3600
           - label: failed
             thresholds: { critical: 1 }
+            link: "https://xyops.home.lan/#Search?result=error&date=today"
             source:
               type: command
               argv:

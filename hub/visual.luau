@@ -74,6 +74,15 @@ local function hoverTo(value, key)
   end
 end
 
+--- Drive the same hover state the card shell does, for a target inside a row that
+--- keys hover by something other than the card: a clickable mini-card tile needs
+--- its own key, and the shell's key is the card. Without this the tile could take
+--- `onClick` but never light up, and a target that does not answer the pointer
+--- reads as decoration.
+function M.hover(value, key)
+  hoverTo(value, key)
+end
+
 -- ── rows ─────────────────────────────────────────────────────────────────────
 
 --- The row every card is drawn in: the github-kanban activity block, with its

@@ -74,6 +74,8 @@ domains:
               argv: ["ssh", "proxmox", "sh -c 'pct list | tail -n +2 | wc -l'"]
             thresholds: { warn: 10, critical: 20 }
             interval_sec: 300
+            # A tile with a link is a button: clicking it opens the target.
+            link: "https://pve.home.lan:8006"
 
       - id: proxmox-mem
         title: Memory

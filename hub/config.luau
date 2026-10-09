@@ -444,6 +444,21 @@ local function readUnit(raw, path, sink)
   return nil
 end
 
+--- A mini-card may carry a `link`: the tile becomes a button that opens it in the
+--- browser, firing the same `link` action a card's own button does (D26). It is a
+--- plain string, not the card's `deep_link` template — a tile is one fact, and a
+--- URL that substitutes the reading is the card's job.
+local function readMiniLink(raw, path, sink)
+  if raw == nil then
+    return nil
+  end
+  if isString(raw) and raw ~= "" then
+    return raw
+  end
+  sink.add(path, "expected a non-empty URL string")
+  return nil
+end
+
 --- `map` is value -> state. Keys are whatever the source yields, so they arrive
 --- from JSON as strings; numbers are accepted and stringified here so a config
 --- author can write `0: ok` without quoting.
@@ -717,11 +732,12 @@ local function readCard(raw, path, seenIds, defaults, sink)
               unit = readUnit(rawMini.unit, miniPath .. ".unit", own),
               intervalSec = readPositive(rawMini.interval_sec, miniPath .. ".interval_sec", own, M.DEFAULT_MINI_INTERVAL),
               timeoutMs = readPositive(rawMini.timeout_ms, miniPath .. ".timeout_ms", own, defaults.timeoutMs),
+              link = readMiniLink(rawMini.link, miniPath .. ".link", own),
             }
           elseif rawMini.value ~= nil then
             local unit = readUnit(rawMini.unit, miniPath .. ".unit", own)
             if (isString(rawMini.value) and rawMini.value ~= "") or isNumber(rawMini.value) then
-              minis[#minis + 1] = { label = label, value = rawMini.value, unit = unit }
+              minis[#minis + 1] = { label = label, value = rawMini.value, unit = unit, link = readMiniLink(rawMini.link, miniPath .. ".link", own) }
             else
               add(miniPath .. ".value", "expected a non-empty string or a number")
             end

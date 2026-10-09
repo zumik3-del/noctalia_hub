@@ -149,17 +149,18 @@ local function cardSecondLine(view, card, record, size)
 end
 
 --- A card's own second row of facts: small tiles on the trailing edge, left of
---- the update badge, each a label over a value. Static for now — the value is
---- whatever the config says — so this renders config, not a reading (D30). Drawn
---- only when the card carries `mini_cards`; a card without them is the shape it
---- always was.
+--- the update badge, each a label over a value. A tile is static (`value`) or
+--- dynamic (`source`), and one carrying a `link` is a button that opens it — the
+--- tile answers the pointer and names its target (D30). Drawn only when the card
+--- carries `mini_cards`; a card without them is the shape it always was.
 local MINI_GAP = 4         -- between the tiles
 local MINI_PAD_H = 6       -- a tile's side padding
 local MINI_PAD_V = 3       -- a tile's top and bottom padding
 local MINI_RADIUS = 6      -- a tile's corner rounding
 local MINI_LABEL_STEP = 2  -- the label sits this far under the value's size
+local MINI_FILL_HOVER = "primary/0.22" -- a clickable tile's fill under the pointer
 
-local function miniCardsRow(view, card, record, size)
+local function miniCardsRow(view, card, record, size, cardIndex)
   local minis = card.miniCards
   if minis == nil or #minis == 0 then
     return nil
@@ -213,14 +214,36 @@ local function miniCardsRow(view, card, record, size)
       valueLabel = ui.row({ tooltip = tooltip, align = "center" }, { valueLabel })
     end
 
-    tiles[#tiles + 1] = ui.column({
+    -- A tile with a `link` is a button: it opens the URL through the same
+    -- dispatch a card's own link button uses (D26), answers the pointer with a
+    -- stronger fill so it reads as clickable, and names its target on the
+    -- tooltip. A tile without one is the inert fact it always was. The key is
+    -- the tile's own — the card shell keys hover by the card, and a tile inside
+    -- it needs a distinct identity to light up on its own.
+    local link = mini.link
+    local miniKey = "mini:" .. tostring(cardIndex) .. ":" .. tostring(i)
+    local active = link ~= nil and Visual.isHovered(miniKey)
+
+    local tile = {
+      key = miniKey,
       width = tileW,
       paddingH = MINI_PAD_H,
       paddingV = MINI_PAD_V,
       radius = MINI_RADIUS,
-      fill = BADGE_FILL,
+      fill = active and MINI_FILL_HOVER or BADGE_FILL,
       gap = 1,
-    }, {
+    }
+    if link ~= nil then
+      tile.tooltip = link
+      tile.onClick = function()
+        view.dispatch("link", link)
+      end
+      tile.onHover = function(value)
+        Visual.hover(value, miniKey)
+      end
+    end
+
+    tiles[#tiles + 1] = ui.column(tile, {
       ui.label({
         -- Upper-cased like a zone title: the tile head is a column head, and the
         -- case of the config word is not something the author should manage.
@@ -425,7 +448,7 @@ function M.renderCard(view, card, record, index)
 
   -- The mini cards sit between the reading and the update badge: a second row of
   -- facts about the same host, on the reading side of the card (D30).
-  local minis = miniCardsRow(view, card, record, size)
+  local minis = miniCardsRow(view, card, record, size, index)
   if minis ~= nil then
     trailing[#trailing + 1] = minis
   end

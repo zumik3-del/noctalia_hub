@@ -1012,7 +1012,8 @@ drawn" — and those are only the same thing by accident.
 ## D30. A card's second row of facts is a field, not a kind
 
 **Decision.** A card may carry `mini_cards`: a list of tiles, each either static
-(`{ label, value }`) or dynamic (`{ label, source, thresholds?, interval_sec? }`),
+(`{ label, value, link? }`) or dynamic
+(`{ label, source, thresholds?, interval_sec?, link? }`),
 drawn as a row of small tinted tiles on the trailing edge, left of the update
 badge. It is a field on the card, not a new `kind` — the card is still a `metric`,
 still fetches, still draws its reading; the tiles are a second row of facts about
@@ -1038,6 +1039,15 @@ its own interval (3600 by default) and its own record nested in the card's, the 
 `updates` is (D27). No staleness: a mini-card has no `stale_after_sec`, so it is
 either fresh or `down`, and a failed fetch keeps the last good value with the reason
 on the tooltip (D7).
+
+**Why a tile may carry a `link`.** A tile is a fact about a host, and the host is
+usually one click away — the Proxmox UI, the failed-jobs search. A `link` on the
+tile makes it a button that fires the same `link` action a card's own button does
+(D26), so the tile opens the target directly instead of the reader hunting for the
+card's link. It answers the pointer with a stronger fill, because a target that
+does not answer the pointer reads as decoration. It is a plain URL, not a
+`deep_link` template: a tile is one fact, and a URL that substitutes the reading is
+the card's job.
 
 **Rejected.**
 
