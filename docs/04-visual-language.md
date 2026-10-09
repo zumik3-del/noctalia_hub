@@ -84,7 +84,7 @@ The header is a menu, also from github-kanban:
 OVERVIEW   SERVICES   RELEASES   LINKS
 ```
 
-Left: name and the trust line (§6). Right: clock, refresh, close. Below: `OVERVIEW`
+Left: name and the trust line (§6). Right: refresh, close. Below: `OVERVIEW`
 plus one tab per zone. `OVERVIEW` is the blank landing tab; a pinned `pin: bottom` zone
 is background and gets no tab.
 

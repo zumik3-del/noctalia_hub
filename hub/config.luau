@@ -43,7 +43,6 @@ for _, sourceType in ipairs(M.SOURCE_TYPES) do SOURCESET[sourceType] = true end
 M.DEFAULT_LAYOUT = {
   density = "compact",
   showHeader = true,
-  clock = "%H:%M:%S",
   staleBadge = true,
   -- Card-block framework ported from github-kanban (D24). Density picks a base
   -- row height and padding; these four are the taste layer on top of it, kept in
@@ -236,15 +235,6 @@ local function readLayout(raw, sink)
       else
         layout[target] = field
       end
-    end
-  end
-
-  local clock = raw.clock
-  if clock ~= nil then
-    if not isString(clock) or clock == "" then
-      sink.add("layout.clock", "expected a non-empty time pattern, e.g. \"%H:%M:%S\"")
-    else
-      layout.clock = clock
     end
   end
 

@@ -48,7 +48,7 @@ that travel with the card ([D28](07-decisions.md), [D30](07-decisions.md)).
 **A publish that changes nothing is a publish that costs a tree rebuild.** Both
 subscribers redraw on every write, so the collector compares a signature of everything
 drawn and skips the write when it matches. Ages are deliberately absent from that
-signature — the panel derives them at render time, so the clock ticks without a write
+signature — the panel derives them at render time, so ages update without a write per second
 once a second.
 
 ### panel.luau — presentation only

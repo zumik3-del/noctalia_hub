@@ -22,7 +22,6 @@ version: 1
 layout:
   density: compact          # compact | standard | comfortable
   show_header: true
-  clock: "%H:%M:%S"
   stale_badge: true
   # Card-block framework (see docs/07-decisions.md, D24). Every field is optional;
   # these are the defaults. Colour is never set here — only density and shape.

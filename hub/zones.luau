@@ -47,7 +47,13 @@ local function zoneProblemCount(domain, records)
       local record = records[card.id]
       local problem = false
       if record ~= nil then
-        if record.state == "down" or record.state == "warn" or record.state == "stale" then
+        -- A card whose reading is fine but whose host has pending OS updates sits
+        -- on the same yellow line as a crossed threshold (D28). Counted here so
+        -- the zone header agrees with the panel header — a zone that says "0"
+        -- over a card the header counts as warn is a contradiction the reader
+        -- can see from the outside.
+        local updatesWarn = record.updates ~= nil and record.updates.state == "warn"
+        if record.state == "down" or record.state == "warn" or record.state == "stale" or updatesWarn then
           problem = true
         end
         -- A failed update check is a reading that could not be made, so it is a

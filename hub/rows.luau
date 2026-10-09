@@ -138,7 +138,7 @@ local function cardSecondLine(view, card, record, size)
     return ui.label({ text = card.description, fontSize = size, color = view.secondary, maxLines = TITLE_MAX_LINES })
   end
 
-  if record.state == "stale" or record.attempts > 0 then
+  if view.staleBadge ~= false and (record.state == "stale" or record.attempts > 0) then
     local text = ageLine(record)
     if text ~= nil then
       return ui.label({ text = text, fontSize = size, color = view.dimmed, maxLines = ONE_LINE })

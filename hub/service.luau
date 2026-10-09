@@ -23,8 +23,7 @@ local Pipeline = require("./pipeline.luau")
 --- One tick per second, the host's only timer for a service entry. Nothing in
 --- the collector moves faster: polling is on per-card intervals, staleness is
 --- computed from the same stamp, and the config watch stats two files. A shorter
---- tick would be a clock nobody reads — the one on screen is drawn from the
---- panel's own second tick, not from this.
+--- tick would be a wake-up nobody reads.
 local TICK_INTERVAL_MS = 1000
 
 noctalia.setUpdateInterval(TICK_INTERVAL_MS)
@@ -198,7 +197,7 @@ end
 --- The panel redraws whenever a watched key is written, so a write that changes
 --- nothing is a wasted tree rebuild. The signature covers exactly what is drawn:
 --- state, value, errors and the row count. Ages are deliberately absent — the
---- panel derives them from `nowMs()` at render time, so the clock keeps ticking
+--- panel derives them from `nowMs()` at render time, so ages update without a write per second
 --- without the collector publishing once a second.
 local function signature()
   local parts = { fatal }

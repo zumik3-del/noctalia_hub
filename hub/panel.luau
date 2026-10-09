@@ -47,7 +47,6 @@ local doc = nil
 local cards = {}
 local summary = nil
 local fatal = ""
-local clock = ""
 
 --- The landing tab, and the only tab that holds no zone. It is stored as the
 --- empty string because a domain id is never empty, so a zone the author happens
@@ -111,10 +110,9 @@ local DENSITY = {
 --- The one place the view looks a layout up, and the one place it may fall back.
 --- `Config.DEFAULT_LAYOUT` rather than `{}`: `render()` bails out before any
 --- geometry is read when there is no document, so a fallback here is never taken
---- for a card — but clockPattern() runs from onOpen, before the first document
---- arrives, and an empty table would make that read nil. Every reader below is a
---- plain read, which is what "every default comes from Config.DEFAULT_LAYOUT
---- rather than being repeated here" means literally.
+--- for a card. Every reader below is a plain read, which is what "every default
+--- comes from Config.DEFAULT_LAYOUT rather than being repeated here" means
+--- literally.
 local function layoutConf()
   if doc ~= nil and type(doc.layout) == "table" then
     return doc.layout
@@ -191,10 +189,6 @@ local function cardBorder(active)
   if active and hover == "border" then return "primary", 1 end
   if mode == "accent" then return "primary", 1 end
   return BORDER_SUBTLE, 1
-end
-
-local function clockPattern()
-  return layoutConf().clock
 end
 
 -- ── header (docs/02-layout.md) ───────────────────────────────────────────────
@@ -297,9 +291,6 @@ local function renderHeader(size, zonePadding)
   -- github-kanban. Refresh still goes through `hub.cmd` because starting a poll
   -- belongs on the collector's side of the boundary (docs/05-architecture.md).
   local right = {
-    ui.glyph({ name = "clock", size = size, color = DIMMED }),
-    Visual.glyphLabel({ text = clock, fontSize = size - HEADER_STEP, color = SECONDARY, maxLines = 1 }),
-    ui.spacer({ width = zonePadding }),
     ui.button({
       glyph = "refresh",
       variant = "ghost",
@@ -382,6 +373,7 @@ local function view()
     secondary = SECONDARY,
     dimmed = DIMMED,
     dispatch = dispatchAction,
+    staleBadge = layoutConf().staleBadge,
   }
 end
 
@@ -432,29 +424,36 @@ function render()
     })
   end
 
-  local main = {
-    renderHeader(size, zonePadding),
-    ui.separator({ thickness = 1, color = DIMMED }),
-    -- Keyed by tab, the way k8s-status does it: when a tab's body changes from
-    -- empty to full, an unkeyed scroll keeps the previous (empty) layout and the
-    -- new zone never appears until the panel is reopened. A fresh key on every
-    -- switch forces the relayout. The inner column stretches to the viewport, so a
-    -- short zone fills the panel, and grows past it — the scroll then takes over.
-    ui.scroll({
-      key = "hub:scroll:" .. activeTab,
+  local main = {}
+
+  -- `showHeader: false` removes the header row entirely. The separator stays: it
+  -- divides the tab strip from the body, and without it the body starts flush
+  -- against the top edge.
+  if layoutConf().showHeader then
+    main[#main + 1] = renderHeader(size, zonePadding)
+  end
+
+  main[#main + 1] = ui.separator({ thickness = 1, color = DIMMED })
+
+  -- Keyed by tab, the way k8s-status does it: when a tab's body changes from
+  -- empty to full, an unkeyed scroll keeps the previous (empty) layout and the
+  -- new zone never appears until the panel is reopened. A fresh key on every
+  -- switch forces the relayout. The inner column stretches to the viewport, so a
+  -- short zone fills the panel, and grows past it — the scroll then takes over.
+  main[#main + 1] = ui.scroll({
+    key = "hub:scroll:" .. activeTab,
+    flexGrow = 1,
+    gap = sizes.zoneGap,
+    align = "stretch",
+  }, {
+    ui.column({
+      key = "hub:items:" .. activeTab,
       flexGrow = 1,
-      gap = sizes.zoneGap,
+      justify = "start",
       align = "stretch",
-    }, {
-      ui.column({
-        key = "hub:items:" .. activeTab,
-        flexGrow = 1,
-        justify = "start",
-        align = "stretch",
-        gap = sizes.zoneGap,
-      }, scrolling),
-    }),
-  }
+      gap = sizes.zoneGap,
+    }, scrolling),
+  })
 
   if footer ~= nil then
     main[#main + 1] = ui.separator({ thickness = 1, color = DIMMED })
@@ -485,17 +484,6 @@ function onOpen(_context)
   seed()
   Visual.clearHover()
 
-  -- The clock is the only thing on screen that must not wait for data.
-  panel.setWantsSecondTicks(true)
-  clock = noctalia.formatTime(clockPattern())
-
-  render()
-end
-
-function update()
-  -- Second tick: redraw for the clock. Nothing else moves on its own, which is
-  -- the restraint docs/04 asks for.
-  clock = noctalia.formatTime(clockPattern())
   render()
 end
 

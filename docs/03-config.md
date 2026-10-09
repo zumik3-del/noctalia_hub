@@ -44,7 +44,6 @@ version: 1
 layout:
   density: compact          # compact | standard | comfortable
   show_header: true
-  clock: "%H:%M:%S"
   stale_badge: true
   font_scale: 100           # 80..130, % applied to every text size
   card_radius: 9            # 0..24 px
@@ -96,7 +95,6 @@ domains:
 | Field | Default | Description |
 |---|---|---|
 | `density` | `compact` | `compact` / `standard` / `comfortable` — base row height, padding, type size |
-| `clock` | `"%H:%M:%S"` | `strftime` pattern for the header clock, redrawn every second |
 | `font_scale` | `100` | `80`–`130`. Multiplier applied to every text size |
 | `card_radius` | `9` | `0`–`24` px corner rounding of a card block |
 | `card_spacing` | `8` | `0`–`32` px gap between cards in a zone |

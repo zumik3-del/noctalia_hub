@@ -67,7 +67,7 @@ OVERVIEW   PROXMOX   GITHUB   RELEASES
 ```
 
 - left: name and the trust line `✓ 24 cards · 2 errors`, always visible
-- right: clock, refresh, close
+- right: refresh, close
 - below: a tab strip, `OVERVIEW` plus one tab per zone
 
 `OVERVIEW` is the default and is reserved for the custom dashboard — deliberately
