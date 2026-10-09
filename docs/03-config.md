@@ -293,6 +293,11 @@ the thresholds, the way it colours a card's reading. Before the first fetch the 
 shows the shared placeholder, and a failed fetch keeps the last good value with the
 reason on the tooltip ([D30](07-decisions.md)).
 
+**A tile without `thresholds` draws in the neutral column colour.** Without a
+threshold, `ok` says only that the fetch worked; a green number would claim more
+than the reading does. A failure is the exception: it is `down` whatever the config
+said. A tile's `label` is drawn upper-case, like a zone title.
+
 `thresholds` must have `warn` below `critical`, and the validator says so rather
 than accepting a card whose amber is unreachable.
 

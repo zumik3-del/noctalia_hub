@@ -180,13 +180,22 @@ local function miniCardsRow(view, card, record, size)
       -- (D7, D30).
       local miniRecord = record ~= nil and record.minis ~= nil and record.minis[i] or nil
       if miniRecord ~= nil then
-        local role = Visual.STATE_ROLES[miniRecord.state] or Visual.STATE_ROLES.pending
         text = (miniRecord.text ~= nil and miniRecord.text ~= "") and miniRecord.text or NO_VALUE
-        color = role.color
         tooltip = miniRecord.error
+        -- Colour is semantic only where the config made it so. A tile with
+        -- thresholds earns the state colour, and a failure earns `down` whatever
+        -- the config said. Without thresholds "ok" says only that the fetch
+        -- worked, so the number draws in the neutral column colour a static tile
+        -- uses — a green number there would claim more than the reading does.
+        if mini.thresholds ~= nil or miniRecord.state == "warn" or miniRecord.state == "down" then
+          local role = Visual.STATE_ROLES[miniRecord.state] or Visual.STATE_ROLES.pending
+          color = role.color
+        else
+          color = view.secondary
+        end
       else
         text = NO_VALUE
-        color = Visual.STATE_ROLES.pending.color
+        color = view.secondary
       end
     else
       text = tostring(mini.value) .. (mini.unit or "")
@@ -214,7 +223,9 @@ local function miniCardsRow(view, card, record, size)
       gap = 1,
     }, {
       ui.label({
-        text = mini.label,
+        -- Upper-cased like a zone title: the tile head is a column head, and the
+        -- case of the config word is not something the author should manage.
+        text = string.upper(mini.label),
         fontSize = size - MINI_LABEL_STEP,
         textAlign = "center",
         color = view.dimmed,
