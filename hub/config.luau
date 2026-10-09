@@ -63,6 +63,11 @@ local DEFAULT_LAYOUT = M.DEFAULT_LAYOUT
 --- lives here rather than once in each of the two layers that needs it.
 M.DEFAULT_MAX_ITEMS = 10
 
+--- A dynamic mini-card polls on its own interval, and an hour is the default: a
+--- number about a host is not worth asking for more often than that, and a
+--- mini-card that does not say is the common case (D30).
+M.DEFAULT_MINI_INTERVAL = 3600
+
 local DEFAULT_DEFAULTS = {
   intervalSec = 60,
   timeoutMs = 8000,
@@ -677,28 +682,41 @@ local function readCard(raw, path, seenIds, defaults, sink)
     end
   end
 
-  -- Mini cards: the card's own second row of facts, drawn as small tiles under
-  -- the description. Static for now — the value is whatever the config says —
-  -- so a wrong type is a config error like every neighbouring field, not a tile
-  -- that renders empty.
+  -- Mini cards: a card's own second row of facts, drawn as small tiles on the
+  -- trailing edge. A tile is either static (`value`) or dynamic (`source`); the
+  -- two are exclusive, because a tile that is both is a config the author did
+  -- not intend (D30).
   if raw.mini_cards ~= nil then
     if not isList(raw.mini_cards) then
-      add(path .. ".mini_cards", "expected a list of { label, value } mappings")
+      add(path .. ".mini_cards", "expected a list of { label, value } or { label, source } mappings")
     else
       local minis = {}
       for i, rawMini in ipairs(raw.mini_cards) do
         local miniPath = path .. ".mini_cards[" .. i .. "]"
         if not isTable(rawMini) then
-          add(miniPath, "expected a { label, value } mapping")
+          add(miniPath, "expected a { label, value } or { label, source } mapping")
         else
           local label = rawMini.label
-          local value = rawMini.value
           if not isString(label) or label == "" then
             add(miniPath .. ".label", "expected a non-empty label")
-          elseif not ((isString(value) and value ~= "") or isNumber(value)) then
-            add(miniPath .. ".value", "expected a non-empty string or a number")
+          elseif rawMini.source ~= nil and rawMini.value ~= nil then
+            add(miniPath, "expected either 'value' (static) or 'source' (dynamic), not both")
+          elseif rawMini.source ~= nil then
+            minis[#minis + 1] = {
+              label = label,
+              source = readSource(rawMini.source, miniPath .. ".source", own),
+              thresholds = readThresholds(rawMini.thresholds, miniPath .. ".thresholds", own),
+              intervalSec = readPositive(rawMini.interval_sec, miniPath .. ".interval_sec", own, M.DEFAULT_MINI_INTERVAL),
+              timeoutMs = readPositive(rawMini.timeout_ms, miniPath .. ".timeout_ms", own, defaults.timeoutMs),
+            }
+          elseif rawMini.value ~= nil then
+            if (isString(rawMini.value) and rawMini.value ~= "") or isNumber(rawMini.value) then
+              minis[#minis + 1] = { label = label, value = rawMini.value }
+            else
+              add(miniPath .. ".value", "expected a non-empty string or a number")
+            end
           else
-            minis[#minis + 1] = { label = label, value = value }
+            add(miniPath, "expected either 'value' (static) or 'source' (dynamic)")
           end
         end
       end

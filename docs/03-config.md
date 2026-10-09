@@ -267,7 +267,7 @@ to care. A card whose value is a string is matched on that string.
 | `format` | Substitution template, e.g. `"{n} nodes"` |
 | `unit` | Suffix: `"%"`, `"ms"`, `"MB"` |
 | `graph` | `true` / a point count / `false` |
-| `mini_cards` | A list of `{ label, value }` — the card's own second row of facts, drawn as small tiles on the trailing edge, left of the update badge. Static for now |
+| `mini_cards` | A list of `{ label, value }` (static) or `{ label, source, thresholds?, interval_sec? }` (dynamic) — the card's own second row of facts, drawn as small tiles on the trailing edge, left of the update badge |
 
 `format` placeholders are plain field names: `{n}` for the extracted value, plus
 any key of a mapping value and, on a `list` card, the count. `{n}`, `{0}` and
@@ -284,6 +284,14 @@ config error, not a field dropped in silence: a `unit: 5` that vanished would le
 the panel looking correct while the suffix was simply missing, which is the failure
 mode the config-errors block exists to prevent
 ([04](04-visual-language.md) §6).
+
+A mini-card is either static or dynamic. A static one carries `value` and draws it
+as-is. A dynamic one carries a full `source` — the same block a card carries — plus
+`thresholds` and `interval_sec`: the collector fetches it on its own interval (3600
+by default) and colours the value by the thresholds, the way it colours a card's
+reading. Before the first fetch the tile shows the shared placeholder, and a failed
+fetch keeps the last good value with the reason on the tooltip
+([D30](07-decisions.md)).
 
 `thresholds` must have `warn` below `critical`, and the validator says so rather
 than accepting a card whose amber is unreachable.

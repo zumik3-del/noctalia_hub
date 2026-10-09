@@ -159,7 +159,7 @@ local MINI_PAD_V = 3       -- a tile's top and bottom padding
 local MINI_RADIUS = 6      -- a tile's corner rounding
 local MINI_LABEL_STEP = 2  -- the label sits this far under the value's size
 
-local function miniCardsRow(view, card, size)
+local function miniCardsRow(view, card, record, size)
   local minis = card.miniCards
   if minis == nil or #minis == 0 then
     return nil
@@ -171,7 +171,40 @@ local function miniCardsRow(view, card, size)
   local tileW = size * 4 + 8
 
   local tiles = {}
-  for _, mini in ipairs(minis) do
+  for i, mini in ipairs(minis) do
+    local text, color, tooltip
+    if mini.source ~= nil then
+      -- A dynamic tile: the collector owns the reading, the panel only draws
+      -- it. Before the first fetch the value is the shared placeholder, and a
+      -- failed one keeps the last good value with the reason on the tooltip
+      -- (D7, D30).
+      local miniRecord = record ~= nil and record.minis ~= nil and record.minis[i] or nil
+      if miniRecord ~= nil then
+        local role = Visual.STATE_ROLES[miniRecord.state] or Visual.STATE_ROLES.pending
+        text = (miniRecord.text ~= nil and miniRecord.text ~= "") and miniRecord.text or NO_VALUE
+        color = role.color
+        tooltip = miniRecord.error
+      else
+        text = NO_VALUE
+        color = Visual.STATE_ROLES.pending.color
+      end
+    else
+      text = tostring(mini.value)
+      color = view.secondary
+    end
+
+    local valueLabel = ui.label({
+      text = text,
+      fontSize = size,
+      textAlign = "center",
+      fontWeight = "medium",
+      color = color,
+      maxLines = ONE_LINE,
+    })
+    if tooltip ~= nil then
+      valueLabel = ui.row({ tooltip = tooltip, align = "center" }, { valueLabel })
+    end
+
     tiles[#tiles + 1] = ui.column({
       width = tileW,
       paddingH = MINI_PAD_H,
@@ -187,14 +220,7 @@ local function miniCardsRow(view, card, size)
         color = view.dimmed,
         maxLines = ONE_LINE,
       }),
-      ui.label({
-        text = tostring(mini.value),
-        fontSize = size,
-        textAlign = "center",
-        fontWeight = "medium",
-        color = view.secondary,
-        maxLines = ONE_LINE,
-      }),
+      valueLabel,
     })
   end
 
@@ -389,7 +415,7 @@ function M.renderCard(view, card, record, index)
 
   -- The mini cards sit between the reading and the update badge: a second row of
   -- facts about the same host, on the reading side of the card (D30).
-  local minis = miniCardsRow(view, card, size)
+  local minis = miniCardsRow(view, card, record, size)
   if minis ~= nil then
     trailing[#trailing + 1] = minis
   end

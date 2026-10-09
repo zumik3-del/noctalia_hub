@@ -67,6 +67,13 @@ domains:
         mini_cards:
           - { label: CPU, value: 68 }
           - { label: RAM, value: 12.4 }
+          # A dynamic tile: fetched on its own interval, coloured by thresholds.
+          - label: VMs
+            source:
+              type: command
+              argv: ["ssh", "proxmox", "sh -c 'pct list | tail -n +2 | wc -l'"]
+            thresholds: { warn: 10, critical: 20 }
+            interval_sec: 300
 
       - id: proxmox-mem
         title: Memory

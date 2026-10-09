@@ -80,6 +80,30 @@ local function newUpdatesRecord(card)
   }
 end
 
+--- A dynamic mini-card gets its own record, nested in the card's the way
+--- `updates` is: it has its own source, its own interval and its own state, and
+--- it travels with the card through adoptRecords and signature (D30). A static
+--- mini-card needs no record — it renders from the config.
+local function newMinisRecord(card)
+  if card.miniCards == nil then
+    return nil
+  end
+  local minis = {}
+  for i, mini in ipairs(card.miniCards) do
+    if mini.source ~= nil then
+      minis[i] = {
+        state = "pending",
+        text = "",
+        error = nil,
+        lastGoodAtMs = nil,
+        attempts = 0,
+        nextDueAtMs = 0,
+      }
+    end
+  end
+  return minis
+end
+
 local function newRecord(card)
   return {
     id = card.id,
@@ -103,6 +127,7 @@ local function newRecord(card)
     -- adoptRecords and signature, and gets its own rhythm: a package check does
     -- not run on the service's cadence (D27).
     updates = newUpdatesRecord(card),
+    minis = newMinisRecord(card),
   }
 end
 
@@ -128,6 +153,17 @@ local function adoptRecords()
             record.updates.text = previous.updates.text
             record.updates.lastGoodAtMs = previous.updates.lastGoodAtMs
             record.updates.attempts = previous.updates.attempts
+          end
+          if record.minis ~= nil and previous.minis ~= nil then
+            for i, mini in ipairs(record.minis) do
+              local prevMini = previous.minis[i]
+              if prevMini ~= nil then
+                mini.state = prevMini.state
+                mini.text = prevMini.text
+                mini.lastGoodAtMs = prevMini.lastGoodAtMs
+                mini.attempts = prevMini.attempts
+              end
+            end
           end
         end
         record.nextDueAtMs = 0 -- poll everything once on (re)load
@@ -168,6 +204,13 @@ local function signature()
   local parts = { fatal }
   for id, record in pairs(cards) do
     local updates = record.updates
+    local minis = record.minis
+    local miniSig = ""
+    if minis ~= nil then
+      for i, mini in ipairs(minis) do
+        miniSig = miniSig .. "\3" .. tostring(i) .. ":" .. mini.state .. ":" .. mini.text .. ":" .. (mini.error or "")
+      end
+    end
     parts[#parts + 1] = table.concat({
       id,
       record.state,
@@ -179,7 +222,7 @@ local function signature()
       updates and updates.state or "",
       updates and updates.text or "",
       updates and updates.error or "",
-    }, "\1")
+    }, "\1") .. miniSig
   end
   table.sort(parts)
   return table.concat(parts, "\2")
@@ -366,6 +409,46 @@ local function pollUpdates(card, record, complete)
   end)
 end
 
+--- A dynamic mini-card's reading, applied the way a card's is: the last good
+--- value survives a failed fetch (D7), and a reading that does not make sense is
+--- `down` with the reason attached. No staleness — a mini-card has no
+--- `stale_after_sec`, so it is either fresh or `down` (D30).
+local function applyMiniReading(mini, miniRecord, raw, err)
+  if err ~= nil then
+    miniRecord.attempts = miniRecord.attempts + 1
+    miniRecord.error = err
+    miniRecord.state = "down"
+    if miniRecord.lastGoodAtMs == nil then
+      miniRecord.text = NO_VALUE
+    end
+    return
+  end
+
+  local reading = Pipeline.evaluate(mini, raw)
+  miniRecord.attempts = 0
+
+  if reading.error ~= nil then
+    miniRecord.error = reading.error
+    miniRecord.state = "down"
+    if miniRecord.lastGoodAtMs == nil then
+      miniRecord.text = Pipeline.NO_READING_TEXT
+    end
+    return
+  end
+
+  miniRecord.error = nil
+  miniRecord.state = reading.state
+  miniRecord.text = reading.text
+  miniRecord.lastGoodAtMs = nowMs()
+end
+
+local function pollMini(mini, miniRecord, complete)
+  Pipeline.fetch(mini, function(raw, err)
+    applyMiniReading(mini, miniRecord, raw, err)
+    complete()
+  end)
+end
+
 --- The degradation ladder from docs/06-failure-modes.md:
 ---   attempt fails    -> down,   previous value retained
 ---   stale_after_sec  -> stale,  previous value retained, dimmed
@@ -412,6 +495,21 @@ local function tickCard(card, record, stamp)
     end)
   end
 
+  -- A dynamic mini-card polls on its own interval, which is its own setting
+  -- rather than the card's: a number about the host can be wanted more or less
+  -- often than the card's own reading (D30).
+  if record.minis ~= nil then
+    for i, mini in ipairs(card.miniCards) do
+      local miniRecord = record.minis[i]
+      if miniRecord ~= nil and stamp >= miniRecord.nextDueAtMs then
+        miniRecord.nextDueAtMs = stamp + mini.intervalSec * 1000
+        enqueue(function(done)
+          pollMini(mini, miniRecord, done)
+        end)
+      end
+    end
+  end
+
   applyAge(record, card, stamp)
 end
 
@@ -452,6 +550,11 @@ local function refreshSoon()
     record.nextDueAtMs = 0
     if record.updates ~= nil then
       record.updates.nextDueAtMs = 0
+    end
+    if record.minis ~= nil then
+      for _, mini in ipairs(record.minis) do
+        mini.nextDueAtMs = 0
+      end
     end
   end)
 end

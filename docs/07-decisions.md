@@ -1011,13 +1011,13 @@ drawn" — and those are only the same thing by accident.
 
 ## D30. A card's second row of facts is a field, not a kind
 
-**Decision.** A card may carry `mini_cards`: a list of `{ label, value }` mappings,
+**Decision.** A card may carry `mini_cards`: a list of tiles, each either static
+(`{ label, value }`) or dynamic (`{ label, source, thresholds?, interval_sec? }`),
 drawn as a row of small tinted tiles on the trailing edge, left of the update
-badge. The values are static config for now. It is a field on the card, not a new
-`kind` — the card is still a `metric`, still fetches, still draws its reading;
-the tiles are a second row of facts about the same host, and a new kind would
-have meant a new fetch, a new extract and a new state for what is a render of
-the config.
+badge. It is a field on the card, not a new `kind` — the card is still a `metric`,
+still fetches, still draws its reading; the tiles are a second row of facts about
+the same host, and a new kind would have meant a new fetch, a new extract and a
+new state for what is a render of the config.
 
 **Why left of the update badge.** The card's trailing edge is where its facts live:
 the reading, the update count, the state dot, then the actions. The tiles are
@@ -1027,10 +1027,14 @@ a target (D15, D26). A full-width row under the whole card would need the card
 wrapper to become a column, which changes the shape of every card to add a
 feature only some have.
 
-**Why static.** Static values first, as asked. Wiring them to the pipeline later
-means a `mini_cards` entry gains a `source` and the tiles become readings; until
-then a wrong type is a config error like every neighbouring field, not a tile that
-renders empty.
+**Why the card's own pipeline.** A dynamic mini-card reuses the card's
+`source → fetch → evaluate` chain unchanged: `readSource` validates it,
+`Pipeline.fetch` and `Pipeline.evaluate` run it, and `thresholds` colour it the way
+they colour a card's reading — no second extractor, no second state machine. It
+gets its own interval (3600 by default) and its own record nested in the card's,
+the way `updates` is (D27). No staleness: a mini-card has no `stale_after_sec`,
+so it is either fresh or `down`, and a failed fetch keeps the last good value
+with the reason on the tooltip (D7).
 
 **Rejected.**
 
