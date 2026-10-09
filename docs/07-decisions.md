@@ -1029,12 +1029,12 @@ feature only some have.
 
 **Why the card's own pipeline.** A dynamic mini-card reuses the card's
 `source → fetch → evaluate` chain unchanged: `readSource` validates it,
-`Pipeline.fetch` and `Pipeline.evaluate` run it, and `thresholds` colour it the way
-they colour a card's reading — no second extractor, no second state machine. It
-gets its own interval (3600 by default) and its own record nested in the card's,
-the way `updates` is (D27). No staleness: a mini-card has no `stale_after_sec`,
-so it is either fresh or `down`, and a failed fetch keeps the last good value
-with the reason on the tooltip (D7).
+`Pipeline.fetch` and `Pipeline.evaluate` run it, and `thresholds` colour it and
+`unit` suffixes it the way they do a card's reading — no second extractor, no
+second state machine. It gets its own interval (3600 by default) and its own
+record nested in the card's, the way `updates` is (D27). No staleness: a mini-card
+has no `stale_after_sec`, so it is either fresh or `down`, and a failed fetch
+keeps the last good value with the reason on the tooltip (D7).
 
 **Rejected.**
 

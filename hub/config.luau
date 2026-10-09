@@ -430,6 +430,20 @@ local function readThresholds(raw, path, sink)
   return out
 end
 
+--- A unit is a non-empty suffix, e.g. `"%"`. A wrong type is a config error, not
+--- a field dropped in silence: the panel would look correct with the suffix
+--- simply missing (docs/04 §6). A card and a mini-card both append one.
+local function readUnit(raw, path, sink)
+  if raw == nil then
+    return nil
+  end
+  if isString(raw) and raw ~= "" then
+    return raw
+  end
+  sink.add(path, "expected a non-empty suffix, e.g. \"%\"")
+  return nil
+end
+
 --- `map` is value -> state. Keys are whatever the source yields, so they arrive
 --- from JSON as strings; numbers are accepted and stringified here so a config
 --- author can write `0: ok` without quoting.
@@ -648,13 +662,7 @@ local function readCard(raw, path, seenIds, defaults, sink)
   -- every neighbouring field reported. A `unit: 5` that vanishes is the failure
   -- mode docs/04 §6 exists to prevent: the panel looks fine and the suffix is
   -- simply missing (zones.luau says it out loud about config problems).
-  if raw.unit ~= nil then
-    if isString(raw.unit) and raw.unit ~= "" then
-      card.unit = raw.unit
-    else
-      add(path .. ".unit", "expected a non-empty suffix, e.g. \"%\"")
-    end
-  end
+  card.unit = readUnit(raw.unit, path .. ".unit", own)
   card.maxItems = readPositive(raw.max_items, path .. ".max_items", own, M.DEFAULT_MAX_ITEMS)
 
   if raw.format ~= nil then
@@ -706,12 +714,14 @@ local function readCard(raw, path, seenIds, defaults, sink)
               label = label,
               source = readSource(rawMini.source, miniPath .. ".source", own),
               thresholds = readThresholds(rawMini.thresholds, miniPath .. ".thresholds", own),
+              unit = readUnit(rawMini.unit, miniPath .. ".unit", own),
               intervalSec = readPositive(rawMini.interval_sec, miniPath .. ".interval_sec", own, M.DEFAULT_MINI_INTERVAL),
               timeoutMs = readPositive(rawMini.timeout_ms, miniPath .. ".timeout_ms", own, defaults.timeoutMs),
             }
           elseif rawMini.value ~= nil then
+            local unit = readUnit(rawMini.unit, miniPath .. ".unit", own)
             if (isString(rawMini.value) and rawMini.value ~= "") or isNumber(rawMini.value) then
-              minis[#minis + 1] = { label = label, value = rawMini.value }
+              minis[#minis + 1] = { label = label, value = rawMini.value, unit = unit }
             else
               add(miniPath .. ".value", "expected a non-empty string or a number")
             end

@@ -65,8 +65,8 @@ domains:
         thresholds: { warn: 6, critical: 8 }
         graph: true
         mini_cards:
-          - { label: CPU, value: 68 }
-          - { label: RAM, value: 12.4 }
+          - { label: CPU, value: 68, unit: "%" }
+          - { label: RAM, value: 12.4, unit: "GB" }
           # A dynamic tile: fetched on its own interval, coloured by thresholds.
           - label: VMs
             source:

@@ -356,6 +356,24 @@ domains:
         description: Automation and plugins
         link: https://xyops.home.lan/
         run: "ssh -t proxmox 'pct enter 109'"
+        # The job success rate over the API. The key is the whole value of the
+        # last argv element, which is what makes the plugin substitute it — only
+        # a whole value is (docs/03 §Secrets) — and `sh -c` then hands it to curl
+        # as $1. `dash_stats` returns today's job_success and job_complete; the
+        # rate is their ratio, so jq computes it and the plugin reads a number.
+        mini_cards:
+          - label: rate
+            unit: "%"
+            source:
+              type: command
+              argv:
+                - sh
+                - -c
+                - |-
+                  curl -k -sS --max-time 5 -H "X-API-Key: $1" https://xyops.home.lan/api/app/dash_stats/v1 | jq -r '(.stats.day.transactions) as $t | (($t.job_success // 0) / (if ($t.job_complete // 0) > 0 then $t.job_complete else 1 end) * 100 | round)'
+                - sh
+                - "${xyops_key}"
+            interval_sec: 3600
         source:
           type: command
           argv: ["curl", "-k", "-sS", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "3", "https://xyops.home.lan/"]
@@ -458,6 +476,7 @@ domains:
         description: Water meter readings
         link: https://xyops.home.lan/api/app/form/v1/yePQkKNWf0umHd0wvEV6aqDLms8pSAT4VT8fNT6RmHD8uYvGFSsZFpxj0opNvkC6
 
-# Secrets are not needed here. When you move to config/hub.example.yaml, put them
-# in hub.secrets.yaml (mode 0600) and reference them as "${name}" — quoted inside
-# a flow mapping, or YAML reads the brace as a nested mapping. See docs/03-config.md.
+# One secret is used: `xyops_key`, the read-only xyOps API key the `rate` tile
+# reads its number with. Put it in hub.secrets.yaml (mode 0600) as
+# `xyops_key: "..."`. A `${name}` is substituted only when it is the whole value,
+# which is why the tile passes the key as its own argv element. See docs/03-config.md.

@@ -189,7 +189,7 @@ local function miniCardsRow(view, card, record, size)
         color = Visual.STATE_ROLES.pending.color
       end
     else
-      text = tostring(mini.value)
+      text = tostring(mini.value) .. (mini.unit or "")
       color = view.secondary
     end
 
