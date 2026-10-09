@@ -353,6 +353,97 @@ local function renderLoading(size, zonePadding)
   })
 end
 
+-- ── overview ─────────────────────────────────────────────────────────────────
+
+--- Overview: health bar + problems list. Shows the fleet-wide picture: how
+--- many cards are ok, warn, down, stale; then every card that is not ok, most
+--- severe first. The data comes from `summary` and `cards` — both already
+--- published by the collector.
+local function renderOverview(size, zonePadding, sizes)
+  if summary == nil then
+    return ui.column({ gap = size, padding = zonePadding, align = "stretch" }, {
+      ui.label({ text = noctalia.tr("header.loading"), fontSize = size, color = DIMMED, maxLines = 1 }),
+    })
+  end
+
+  local padding = zonePadding
+
+  -- Health bar: one row of four tiles, each showing a count and its label.
+  -- Colour is semantic: ok is primary, warn is warn, down is error, stale is
+  -- dimmed. A tile with 0 is still drawn — the absence of a problem is a fact
+  -- the reader wants to see, not a gap to skip.
+  local function healthTile(count, label, color)
+    return ui.column({ gap = 2, padding = padding, fill = FILL_TINTED, radius = cardRadius() }, {
+      ui.label({ text = tostring(count), fontSize = size + 4, fontWeight = "bold", color = color }),
+      ui.label({ text = label, fontSize = size - 2, color = DIMMED, maxLines = 1 }),
+    })
+  end
+
+  local healthBar = ui.row({ gap = sizes.rowGap, align = "stretch" }, {
+    healthTile(summary.ok or 0, "ok", "primary"),
+    healthTile(summary.warn or 0, "warn", Visual.STATE_ROLES.warn.color),
+    healthTile(summary.down or 0, "down", "error"),
+    healthTile(summary.stale or 0, "stale", DIMMED),
+  })
+
+  -- Problems list: every card that is not ok, most severe first.
+  -- A card whose own state is ok but whose host has pending updates is warn
+  -- (D28), so it belongs here.
+  local problems = {}
+  for id, record in pairs(cards) do
+    local updatesWarn = record.updates ~= nil and record.updates.state == "warn"
+    local severity = 0
+    local state = record.state
+    local label = nil
+    local color = nil
+
+    if state == "down" or record.error ~= nil or record.configError ~= nil then
+      severity = 3
+      label = record.error or record.configError or state
+      color = "error"
+    elseif state == "stale" then
+      severity = 2
+      label = state
+      color = DIMMED
+    elseif state == "warn" or ((state == "ok" or state == "pending") and updatesWarn) then
+      severity = 1
+      label = updatesWarn and "updates" or state
+      color = Visual.STATE_ROLES.warn.color
+    end
+
+    if severity > 0 then
+      problems[#problems + 1] = { id = id, severity = severity, label = label, color = color }
+    end
+  end
+
+  table.sort(problems, function(a, b)
+    if a.severity ~= b.severity then return a.severity > b.severity end
+    return a.id < b.id
+  end)
+
+  local problemRows = {}
+  for _, p in ipairs(problems) do
+    problemRows[#problemRows + 1] = ui.row({ gap = 6, align = "center", paddingH = padding, paddingV = 4 }, {
+      ui.glyph({ name = p.severity == 3 and "alert-triangle" or p.severity == 2 and "alert-circle" or "alert", size = size, color = p.color }),
+      ui.label({ text = p.id, fontSize = size, color = p.color, fontWeight = "bold", maxLines = 1 }),
+      ui.label({ text = p.label, fontSize = size, color = DIMMED, maxLines = 1 }),
+    })
+  end
+
+  local children = {
+    healthBar,
+  }
+
+  if #problemRows > 0 then
+    children[#children + 1] = ui.separator({ thickness = 1, color = DIMMED })
+    for _, row in ipairs(problemRows) do
+      children[#children + 1] = row
+    end
+  end
+
+  return ui.column({ gap = sizes.rowGap, padding = zonePadding, align = "stretch" }, children)
+end
+
 -- ── render ───────────────────────────────────────────────────────────────────
 
 --- What the row and zone renderers get from this file. Built per render rather
@@ -414,11 +505,12 @@ function render()
     end
   end
 
-  -- `overview` is the custom dashboard and is blank in this build, so it is the
-  -- one tab where an empty body is the intended state and not a missing config.
+  -- `overview` is the custom dashboard: health bar + problems list.
   -- The config-errors block above still draws there: a broken config must never
   -- hide behind a blank tab (docs/06-failure-modes.md).
-  if #scrolling == 0 and activeTab ~= OVERVIEW then
+  if activeTab == OVERVIEW then
+    scrolling[1] = renderOverview(size, zonePadding, sizes)
+  elseif #scrolling == 0 then
     scrolling[1] = ui.column({ gap = sizes.rowGap, padding = zonePadding }, {
       ui.label({ text = noctalia.tr("zone.no_domains"), fontSize = size, color = DIMMED, maxLines = 2 }),
     })

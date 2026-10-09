@@ -70,10 +70,49 @@ OVERVIEW   PROXMOX   GITHUB   RELEASES
 - right: refresh, close
 - below: a tab strip, `OVERVIEW` plus one tab per zone
 
-`OVERVIEW` is the default and is reserved for the custom dashboard — deliberately
-blank in this build. Each other tab shows one zone. A `pin: bottom` zone is
-background, so it keeps its footer place instead of getting a tab. `esc` and `r` work
-from the keyboard.
+`OVERVIEW` is the default and is reserved for the custom dashboard — a fleet-wide
+summary with a health bar and a problems list (see below). Each other tab shows one
+zone. A `pin: bottom` zone is background, so it keeps its footer place instead of
+getting a tab. `esc` and `r` work from the keyboard.
+
+## Overview tab
+
+The overview tab is a fleet-wide summary: a health bar showing how many cards
+are ok, warn, down, or stale, followed by a problems list of every card that is
+not ok, most severe first.
+
+```
+┌─────────────────────────────────────────────────┐
+│  ✓ 24 cards · 2 errors              [↻] [✕]    │
+├─────────────────────────────────────────────────┤
+│  [OVERVIEW]  [INFRA]  [SERVICES]  [MEDIA]       │
+├─────────────────────────────────────────────────┤
+│                                                 │
+│  ┌──────┐  ┌──────┐  ┌──────┐  ┌──────┐        │
+│  │  18  │  │  3   │  │  2   │  │  1   │        │
+│  │  ok  │  │ warn │  │ down │  │stale │        │
+│  └──────┘  └──────┘  └──────┘  └──────┘        │
+│                                                 │
+│  ─────────────────────────────────────────────  │
+│                                                 │
+│  ⚠ pihole              42 updates pending       │
+│  ⚠ proxmox             disk 85% full            │
+│  ⚠ lxc-121             container stopped        │
+│                                                 │
+│  ✗ home-assistant      timeout after 8s         │
+│  ✗ grafana             connection refused       │
+│                                                 │
+└─────────────────────────────────────────────────┘
+```
+
+The health bar is one row of four tiles, each showing a count and its label.
+Colour is semantic: ok is primary, warn is warn, down is error, stale is dimmed.
+A tile with 0 is still drawn — the absence of a problem is a fact the reader
+wants to see, not a gap to skip.
+
+The problems list shows every card that is not ok, sorted by severity:
+down and errors first, then stale, then warn. A card whose own state is ok but
+whose host has pending updates is warn (D28), so it belongs here.
 
 ## Footer
 
