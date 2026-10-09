@@ -506,10 +506,11 @@ function render()
   end
 
   -- `overview` is the custom dashboard: health bar + problems list.
-  -- The config-errors block above still draws there: a broken config must never
-  -- hide behind a blank tab (docs/06-failure-modes.md).
+  -- Appended, not assigned to `scrolling[1]`: the config-errors block above is
+  -- already there, and a broken config must never hide behind the dashboard
+  -- (docs/06-failure-modes.md).
   if activeTab == OVERVIEW then
-    scrolling[1] = renderOverview(size, zonePadding, sizes)
+    scrolling[#scrolling + 1] = renderOverview(size, zonePadding, sizes)
   elseif #scrolling == 0 then
     scrolling[1] = ui.column({ gap = sizes.rowGap, padding = zonePadding }, {
       ui.label({ text = noctalia.tr("zone.no_domains"), fontSize = size, color = DIMMED, maxLines = 2 }),
