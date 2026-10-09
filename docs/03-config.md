@@ -267,7 +267,7 @@ to care. A card whose value is a string is matched on that string.
 | `format` | Substitution template, e.g. `"{n} nodes"` |
 | `unit` | Suffix: `"%"`, `"ms"`, `"MB"` |
 | `graph` | `true` / a point count / `false` |
-| `mini_cards` | A list of `{ label, value }` — the card's own second row of facts, drawn as small tiles under the description. Static for now |
+| `mini_cards` | A list of `{ label, value }` — the card's own second row of facts, drawn as small tiles on the trailing edge, left of the update badge. Static for now |
 
 `format` placeholders are plain field names: `{n}` for the extracted value, plus
 any key of a mapping value and, on a `list` card, the count. `{n}`, `{0}` and

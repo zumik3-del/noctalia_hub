@@ -1012,18 +1012,20 @@ drawn" — and those are only the same thing by accident.
 ## D30. A card's second row of facts is a field, not a kind
 
 **Decision.** A card may carry `mini_cards`: a list of `{ label, value }` mappings,
-drawn as a row of small tinted tiles under the description. The values are static
-config for now. It is a field on the card, not a new `kind` — the card is still a
-`metric`, still fetches, still draws its reading; the tiles are a second row of
-facts about the same host, and a new kind would have meant a new fetch, a new
-extract and a new state for what is a render of the config.
+drawn as a row of small tinted tiles on the trailing edge, left of the update
+badge. The values are static config for now. It is a field on the card, not a new
+`kind` — the card is still a `metric`, still fetches, still draws its reading;
+the tiles are a second row of facts about the same host, and a new kind would
+have meant a new fetch, a new extract and a new state for what is a render of
+the config.
 
-**Why under the description.** The card's middle column is the flexible one: the
-title and description live there, and the reading sits on the trailing edge,
-vertically centred. The tiles go in that column, under the description, so the
-card grows downward and the reading keeps its place. A full-width row under the
-whole card would need the card wrapper to become a column, which changes the
-shape of every card to add a feature only some have.
+**Why left of the update badge.** The card's trailing edge is where its facts live:
+the reading, the update count, the state dot, then the actions. The tiles are
+readings, so they sit with the readings, between the main value and the update
+badge — a click on a tile is not a click on an action, and the two must not share
+a target (D15, D26). A full-width row under the whole card would need the card
+wrapper to become a column, which changes the shape of every card to add a
+feature only some have.
 
 **Why static.** Static values first, as asked. Wiring them to the pipeline later
 means a `mini_cards` entry gains a `source` and the tiles become readings; until

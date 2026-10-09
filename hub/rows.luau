@@ -148,10 +148,11 @@ local function cardSecondLine(view, card, record, size)
   return nil
 end
 
---- A card's own second row of facts: small tiles under the description, each a
---- label over a value. Static for now — the value is whatever the config says —
---- so this renders config, not a reading (D30). Drawn only when the card carries
---- `mini_cards`; a card without them is the shape it always was.
+--- A card's own second row of facts: small tiles on the trailing edge, left of
+--- the update badge, each a label over a value. Static for now — the value is
+--- whatever the config says — so this renders config, not a reading (D30). Drawn
+--- only when the card carries `mini_cards`; a card without them is the shape it
+--- always was.
 local MINI_GAP = 4         -- between the tiles
 local MINI_PAD_H = 6       -- a tile's side padding
 local MINI_PAD_V = 3       -- a tile's top and bottom padding
@@ -164,9 +165,15 @@ local function miniCardsRow(view, card, size)
     return nil
   end
 
+  -- A tile is a fixed width so the row reads as cards rather than loose labels,
+  -- and the text is centred in it: a label that hugs its own text has no room
+  -- on either side to centre in.
+  local tileW = size * 4 + 8
+
   local tiles = {}
   for _, mini in ipairs(minis) do
     tiles[#tiles + 1] = ui.column({
+      width = tileW,
       paddingH = MINI_PAD_H,
       paddingV = MINI_PAD_V,
       radius = MINI_RADIUS,
@@ -176,12 +183,14 @@ local function miniCardsRow(view, card, size)
       ui.label({
         text = mini.label,
         fontSize = size - MINI_LABEL_STEP,
+        textAlign = "center",
         color = view.dimmed,
         maxLines = ONE_LINE,
       }),
       ui.label({
         text = tostring(mini.value),
         fontSize = size,
+        textAlign = "center",
         fontWeight = "medium",
         color = view.secondary,
         maxLines = ONE_LINE,
@@ -349,10 +358,6 @@ function M.renderCard(view, card, record, index)
   if second ~= nil then
     lines[#lines + 1] = second
   end
-  local minis = miniCardsRow(view, card, size)
-  if minis ~= nil then
-    lines[#lines + 1] = minis
-  end
 
   -- The reading and its state marker, then the card's buttons. Each button has
   -- its own target, so two of them is not the ambiguity the old one-action rule
@@ -380,6 +385,13 @@ function M.renderCard(view, card, record, index)
       color = stateColor,
       maxLines = ONE_LINE,
     })
+  end
+
+  -- The mini cards sit between the reading and the update badge: a second row of
+  -- facts about the same host, on the reading side of the card (D30).
+  local minis = miniCardsRow(view, card, size)
+  if minis ~= nil then
+    trailing[#trailing + 1] = minis
   end
 
   -- The update count sits between the reading and the dot: it is a second reading
