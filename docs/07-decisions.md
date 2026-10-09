@@ -1006,3 +1006,34 @@ at six (D22). A ported widget draws a *zone*, declared on the domain, and its
 version shows in the panel (D21). It never becomes a seventh card kind, because that
 would make `kind` mean "which code draws this" as well as "how the reading is
 drawn" — and those are only the same thing by accident.
+
+---
+
+## D30. A card's second row of facts is a field, not a kind
+
+**Decision.** A card may carry `mini_cards`: a list of `{ label, value }` mappings,
+drawn as a row of small tinted tiles under the description. The values are static
+config for now. It is a field on the card, not a new `kind` — the card is still a
+`metric`, still fetches, still draws its reading; the tiles are a second row of
+facts about the same host, and a new kind would have meant a new fetch, a new
+extract and a new state for what is a render of the config.
+
+**Why under the description.** The card's middle column is the flexible one: the
+title and description live there, and the reading sits on the trailing edge,
+vertically centred. The tiles go in that column, under the description, so the
+card grows downward and the reading keeps its place. A full-width row under the
+whole card would need the card wrapper to become a column, which changes the
+shape of every card to add a feature only some have.
+
+**Why static.** Static values first, as asked. Wiring them to the pipeline later
+means a `mini_cards` entry gains a `source` and the tiles become readings; until
+then a wrong type is a config error like every neighbouring field, not a tile that
+renders empty.
+
+**Rejected.**
+
+- *A new `kind: mini`.* A kind is "how to draw the reading" (D4); these tiles
+  have no reading. They would need their own fetch and state for a render of
+  config.
+- *Reusing `format` for the tiles.* `format` is the reading's template; the tiles
+  are a different fact with their own labels.

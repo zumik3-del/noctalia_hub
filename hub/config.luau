@@ -677,6 +677,35 @@ local function readCard(raw, path, seenIds, defaults, sink)
     end
   end
 
+  -- Mini cards: the card's own second row of facts, drawn as small tiles under
+  -- the description. Static for now — the value is whatever the config says —
+  -- so a wrong type is a config error like every neighbouring field, not a tile
+  -- that renders empty.
+  if raw.mini_cards ~= nil then
+    if not isList(raw.mini_cards) then
+      add(path .. ".mini_cards", "expected a list of { label, value } mappings")
+    else
+      local minis = {}
+      for i, rawMini in ipairs(raw.mini_cards) do
+        local miniPath = path .. ".mini_cards[" .. i .. "]"
+        if not isTable(rawMini) then
+          add(miniPath, "expected a { label, value } mapping")
+        else
+          local label = rawMini.label
+          local value = rawMini.value
+          if not isString(label) or label == "" then
+            add(miniPath .. ".label", "expected a non-empty label")
+          elseif not ((isString(value) and value ~= "") or isNumber(value)) then
+            add(miniPath .. ".value", "expected a non-empty string or a number")
+          else
+            minis[#minis + 1] = { label = label, value = value }
+          end
+        end
+      end
+      card.miniCards = minis
+    end
+  end
+
   -- A green metric with no thresholds means nothing: is 38% memory nominal or an
   -- emergency? D10 makes it a config error rather than a neutral colour.
   if card.kind == "metric" and card.thresholds == nil then

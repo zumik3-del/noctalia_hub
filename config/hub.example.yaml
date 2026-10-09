@@ -64,6 +64,9 @@ domains:
         format: "{n} nodes"
         thresholds: { warn: 6, critical: 8 }
         graph: true
+        mini_cards:
+          - { label: CPU, value: 68 }
+          - { label: RAM, value: 12.4 }
 
       - id: proxmox-mem
         title: Memory

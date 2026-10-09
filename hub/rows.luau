@@ -148,6 +148,50 @@ local function cardSecondLine(view, card, record, size)
   return nil
 end
 
+--- A card's own second row of facts: small tiles under the description, each a
+--- label over a value. Static for now — the value is whatever the config says —
+--- so this renders config, not a reading (D30). Drawn only when the card carries
+--- `mini_cards`; a card without them is the shape it always was.
+local MINI_GAP = 4         -- between the tiles
+local MINI_PAD_H = 6       -- a tile's side padding
+local MINI_PAD_V = 3       -- a tile's top and bottom padding
+local MINI_RADIUS = 6      -- a tile's corner rounding
+local MINI_LABEL_STEP = 2  -- the label sits this far under the value's size
+
+local function miniCardsRow(view, card, size)
+  local minis = card.miniCards
+  if minis == nil or #minis == 0 then
+    return nil
+  end
+
+  local tiles = {}
+  for _, mini in ipairs(minis) do
+    tiles[#tiles + 1] = ui.column({
+      paddingH = MINI_PAD_H,
+      paddingV = MINI_PAD_V,
+      radius = MINI_RADIUS,
+      fill = BADGE_FILL,
+      gap = 1,
+    }, {
+      ui.label({
+        text = mini.label,
+        fontSize = size - MINI_LABEL_STEP,
+        color = view.dimmed,
+        maxLines = ONE_LINE,
+      }),
+      ui.label({
+        text = tostring(mini.value),
+        fontSize = size,
+        fontWeight = "medium",
+        color = view.secondary,
+        maxLines = ONE_LINE,
+      }),
+    })
+  end
+
+  return ui.row({ gap = MINI_GAP, align = "start" }, tiles)
+end
+
 --- The update badge: a card's second reading, drawn before the state dot. It is
 --- silent when there is nothing to say — no pending updates, or the check has not
 --- answered yet — a warn-coloured count when there are, and a dim red glyph when
@@ -304,6 +348,10 @@ function M.renderCard(view, card, record, index)
   local second = cardSecondLine(view, card, record, size)
   if second ~= nil then
     lines[#lines + 1] = second
+  end
+  local minis = miniCardsRow(view, card, size)
+  if minis ~= nil then
+    lines[#lines + 1] = minis
   end
 
   -- The reading and its state marker, then the card's buttons. Each button has
